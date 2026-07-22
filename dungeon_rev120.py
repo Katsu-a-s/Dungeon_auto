@@ -864,6 +864,50 @@ def save_achievements(data):
     except Exception:
         pass
 
+# --- 音量設定 ---
+_settings_cache = None
+
+def load_settings():
+    """settings.jsonをキャッシュして返す(achievements.jsonと同じパターン)。"""
+    global _settings_cache
+    if _settings_cache is None:
+        try:
+            with open("settings.json", "r") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+        data.setdefault("bgm_volume", 0.7)
+        data.setdefault("se_volume", 0.8)
+        _settings_cache = data
+    return dict(_settings_cache)
+
+def save_settings(data):
+    global _settings_cache
+    _settings_cache = dict(data)
+    try:
+        with open("settings.json", "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+bgm_volume = load_settings()["bgm_volume"]
+se_volume = load_settings()["se_volume"]
+
+def adjust_bgm_volume(delta):
+    global bgm_volume
+    bgm_volume = round(min(1.0, max(0.0, bgm_volume + delta)), 2)
+    pygame.mixer.music.set_volume(bgm_volume)
+    s = load_settings()
+    s["bgm_volume"] = bgm_volume
+    save_settings(s)
+
+def adjust_se_volume(delta):
+    global se_volume
+    se_volume = round(min(1.0, max(0.0, se_volume + delta)), 2)
+    s = load_settings()
+    s["se_volume"] = se_volume
+    save_settings(s)
+
 ACHIEVEMENT_LABELS = dict(ACHIEVEMENT_DEFS)
 
 def unlock_achievement(key):
@@ -4129,6 +4173,7 @@ def main():
     global bounty_active
     global totem_buff_active, totem_str_bonus, totem_def_bonus
     global bestiary_detail_kind, bestiary_detail_index, bestiary_detail_img, bestiary_detail_seen
+    global bgm_volume, se_volume
     dmg = 0
     lif_p = 0
     str_p = 0
@@ -4150,6 +4195,9 @@ def main():
           pygame.mixer.Sound("sound/ohd_jin_gameover.ogg"),
           pygame.mixer.Sound("sound/ohd_jin_levup.ogg"),
           pygame.mixer.Sound("sound/ohd_jin_win.ogg")]
+    pygame.mixer.music.set_volume(bgm_volume)
+    for _snd in se:
+        _snd.set_volume(se_volume)
     
     while True:
         for event in pygame.event.get():
@@ -4335,6 +4383,33 @@ def main():
                 # タイトル画面でYキーによりデイリーチャレンジ(今日の固定シード)を開始する
                 if event.key == K_y and idx == 0:
                     daily_start_requested = True
+                # タイトル画面でOキーにより音量設定画面を開く
+                if event.key == K_o and idx == 0:
+                    idx = 56
+                    tmr = 0
+                if idx == 56:
+                    if event.key == K_ESCAPE:
+                        idx = 0
+                        tmr = 0
+                    elif event.key == K_LEFT:
+                        adjust_bgm_volume(-0.1)
+                    elif event.key == K_RIGHT:
+                        adjust_bgm_volume(0.1)
+                    elif event.key == K_DOWN:
+                        adjust_se_volume(-0.1)
+                        for _snd in se:
+                            _snd.set_volume(se_volume)
+                    elif event.key == K_UP:
+                        adjust_se_volume(0.1)
+                        for _snd in se:
+                            _snd.set_volume(se_volume)
+                # タイトル画面でCキーにより操作説明画面を開く
+                if event.key == K_c and idx == 0:
+                    idx = 57
+                    tmr = 0
+                if idx == 57 and event.key in (K_ESCAPE, K_RETURN, K_SPACE):
+                    idx = 0
+                    tmr = 0
                 # 拠点(サンクチュア)でのアイテム交換
                 if idx == 28:
                     if event.key == K_p and potion >= 2:
@@ -4568,6 +4643,24 @@ def main():
                 elif action == "open_daily_ranking":
                     idx = 53
                     tmr = 0
+                elif action == "open_options":
+                    idx = 56
+                    tmr = 0
+                elif action == "open_controls":
+                    idx = 57
+                    tmr = 0
+                elif action == "vol_bgm_down":
+                    adjust_bgm_volume(-0.1)
+                elif action == "vol_bgm_up":
+                    adjust_bgm_volume(0.1)
+                elif action == "vol_se_down":
+                    adjust_se_volume(-0.1)
+                    for _snd in se:
+                        _snd.set_volume(se_volume)
+                elif action == "vol_se_up":
+                    adjust_se_volume(0.1)
+                    for _snd in se:
+                        _snd.set_volume(se_volume)
                 elif action and action.startswith("view_enemy_"):
                     vi = int(action.rsplit("_", 1)[1])
                     if 0 <= vi < len(EMY_NAME):
@@ -4789,6 +4882,15 @@ def main():
                 label = "[H] Hidden Stage"
                 draw_button(screen, fontS, MENU_X, y, fontS.size(label)[0] + 30, 26, label, "hidden",
                             base_color=(190, 50, 170), mouse_pos=mouse_pos)
+                y += ROW_H - 8
+            # [O] 音量設定 / [C] 操作説明(新規プレイヤー向けのUX改善用ボタン)
+            opt_label = "[O] Options"
+            ctrl_label = "[C] Controls"
+            opt_w = fontS.size(opt_label)[0] + 30
+            draw_button(screen, fontS, MENU_X, y, opt_w, 26, opt_label, "open_options",
+                        base_color=(95, 95, 105), mouse_pos=mouse_pos)
+            draw_button(screen, fontS, MENU_X + opt_w + 12, y, fontS.size(ctrl_label)[0] + 30, 26, ctrl_label,
+                        "open_controls", base_color=(95, 95, 105), mouse_pos=mouse_pos)
             if key[K_SPACE] == 1 or daily_start_requested or hero_start_requested:
                 is_daily = daily_start_requested
                 daily_start_requested = False
@@ -5128,6 +5230,71 @@ def main():
             draw_text(screen, "Quit to desktop?", 300, 320, font, WHITE)
             draw_text(screen, "Unsaved progress since the last save/autosave will be lost.", 130, 370, fontS, (220, 180, 100))
             draw_text(screen, "[Y] Quit   [N/Esc] Cancel", 310, 420, fontS, WHITE)
+
+        elif idx == 56:
+            # 設定画面: BGM/SE音量をボタン(またはタイトルからは矢印キー)で調整する
+            title_menu_rects.clear()
+            screen.fill(BLACK)
+            screen.blit(imgTitle, [-50, 80])
+            panel = pygame.Surface((880, 720))
+            panel.set_alpha(175)
+            panel.fill(BLACK)
+            screen.blit(panel, [0, 0])
+            MENU_X = 215
+            draw_text(screen, "Options", MENU_X, 130, font, (255, 215, 0))
+            row_y = 230
+            bgm_pct = int(round(bgm_volume * 100))
+            se_pct = int(round(se_volume * 100))
+            draw_text(screen, f"BGM Volume: {bgm_pct}%", MENU_X, row_y, font, WHITE)
+            draw_bar(screen, MENU_X, row_y + 36, 300, 18, bgm_volume, 1.0)
+            draw_button(screen, font, MENU_X + 320, row_y - 3, 44, 30, "-", "vol_bgm_down",
+                        base_color=(90, 90, 100), mouse_pos=mouse_pos, align="center")
+            draw_button(screen, font, MENU_X + 372, row_y - 3, 44, 30, "+", "vol_bgm_up",
+                        base_color=(90, 90, 100), mouse_pos=mouse_pos, align="center")
+            row_y += 100
+            draw_text(screen, f"SE Volume: {se_pct}%", MENU_X, row_y, font, WHITE)
+            draw_bar(screen, MENU_X, row_y + 36, 300, 18, se_volume, 1.0)
+            draw_button(screen, font, MENU_X + 320, row_y - 3, 44, 30, "-", "vol_se_down",
+                        base_color=(90, 90, 100), mouse_pos=mouse_pos, align="center")
+            draw_button(screen, font, MENU_X + 372, row_y - 3, 44, 30, "+", "vol_se_up",
+                        base_color=(90, 90, 100), mouse_pos=mouse_pos, align="center")
+            draw_text(screen, "Left/Right: BGM   Up/Down: SE   Esc: Back", MENU_X, row_y + 90, fontS, (170, 170, 170))
+            draw_button(screen, font, MENU_X, row_y + 130, 200, 36, "Back", "back_to_title",
+                        base_color=(80, 80, 90), mouse_pos=mouse_pos, align="center")
+
+        elif idx == 57:
+            # 操作説明画面: 探索・戦闘・タイトルのキー操作を一覧表示する
+            title_menu_rects.clear()
+            screen.fill(BLACK)
+            screen.blit(imgTitle, [-50, 80])
+            panel = pygame.Surface((880, 720))
+            panel.set_alpha(180)
+            panel.fill(BLACK)
+            screen.blit(panel, [0, 0])
+            MENU_X = 120
+            draw_text(screen, "Controls", MENU_X, 90, font, (255, 215, 0))
+            col_y = 150
+            draw_text(screen, "Exploration", MENU_X, col_y, fontS, (120, 200, 255))
+            for line in ["Arrow keys - Move", "Q - Save menu", "Esc - Quit confirmation"]:
+                col_y += 26
+                draw_text(screen, line, MENU_X + 10, col_y, fontS, WHITE)
+            col_y += 40
+            draw_text(screen, "Battle", MENU_X, col_y, fontS, (120, 200, 255))
+            for line in ["A - Attack   P - Potion   B - Blaze gem",
+                         "D - Defense   F - Focus   R - Run",
+                         "Up/Down - Select command   Space/Enter - Confirm"]:
+                col_y += 26
+                draw_text(screen, line, MENU_X + 10, col_y, fontS, WHITE)
+            col_y += 40
+            draw_text(screen, "Title Screen", MENU_X, col_y, fontS, (120, 200, 255))
+            for line in ["T - Difficulty   N - Hero   G - Game Data",
+                         "R - Records   Y - Daily Challenge   O - Options",
+                         "H - Hidden Stage (after clearing the game)"]:
+                col_y += 26
+                draw_text(screen, line, MENU_X + 10, col_y, fontS, WHITE)
+            col_y += 40
+            draw_button(screen, font, MENU_X, col_y, 240, 36, "Back", "back_to_title",
+                        base_color=(80, 80, 90), mouse_pos=mouse_pos, align="center")
 
         elif idx == 30:
             # セーブメニュー(ダンジョン画面に重ねて表示)
