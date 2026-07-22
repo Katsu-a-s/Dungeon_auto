@@ -3623,12 +3623,12 @@ def boss_image_file(fl):
     return BOSS_IMAGE_MAP.get(fl, BOSS_HIDDEN_IMAGE)
 
 # --- エコーバトル(撃破済みボスとの再戦) ---
-# 一部のボスには色反転版の「エコー」画像(*_ori.png)が用意されているため、
-# それらのボスだけ図鑑から再戦を挑めるようにする(60階のボスは反転画像が無いため対象外)。
+# 通常のボス画像(enemyNN.png)をそのまま使い、対応するボスだけ図鑑から
+# 再戦を挑めるようにする(60階のボスはこのマップに無いため対象外)。
 ECHO_ORI_MAP = {
-    10: "enemy11_ori.png", 20: "enemy12_ori.png", 30: "enemy13_ori.png",
-    40: "enemy14_ori.png", 50: "enemy15_ori.png",
-    70: "enemy17_ori.png", 80: "enemy18_ori.png", 90: "enemy19_ori.png",
+    10: "enemy11.png", 20: "enemy12.png", 30: "enemy13.png",
+    40: "enemy14.png", 50: "enemy15.png",
+    70: "enemy17.png", 80: "enemy18.png", 90: "enemy19.png",
 }
 ECHO_ELIGIBLE_FLOORS = sorted(ECHO_ORI_MAP.keys())
 
