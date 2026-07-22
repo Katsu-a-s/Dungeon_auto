@@ -724,6 +724,7 @@ ACHIEVEMENT_DEFS = [
     ("skill_maxed", "Max out any single skill"),
     ("grandmaster", "Unlock the Grandmaster capstone skill"),
     ("echo_hunter", "Defeat an Echo Battle boss"),
+    ("echo_master", "Defeat every Echo Battle boss at least once"),
     ("merchant_regular", "Trade with a merchant 5 times"),
     ("elite_hunter", "Defeat an Elite monster"),
     ("explorer", "Fully explore 10 floors"),
@@ -764,6 +765,7 @@ TITLE_DEFS = [
     ("boss_defeat",        "the Boss Slayer"),
     ("grandmaster",        "the Grandmaster"),
     ("skill_maxed",        "the Adept"),
+    ("echo_master",        "the Echomaster"),
     ("echo_hunter",        "the Echo Hunter"),
     ("merchant_regular",   "the Regular"),
     ("elite_hunter",       "the Elite Hunter"),
@@ -831,6 +833,8 @@ def is_boss_floor(fl):
     return fl >= BOSS_FLOOR_INTERVAL and fl % BOSS_FLOOR_INTERVAL == 0
 
 _achievements_cache = None
+achievements_scroll = 0
+ACHIEVEMENTS_VISIBLE_ROWS = 13
 
 def load_achievements():
     """achievements.jsonはタイトル画面や実績一覧など複数の描画箇所から毎フレーム
@@ -847,6 +851,7 @@ def load_achievements():
         for key, _ in ACHIEVEMENT_DEFS:
             data.setdefault(key, False)
         data.setdefault("trap_count", 0)
+        data.setdefault("echo_floors_defeated", [])
         _achievements_cache = data
     return dict(_achievements_cache)
 
@@ -3632,6 +3637,21 @@ ECHO_ORI_MAP = {
 }
 ECHO_ELIGIBLE_FLOORS = sorted(ECHO_ORI_MAP.keys())
 
+def register_echo_boss_defeat(fl):
+    """Echo Battle勝利のたびに撃破済みフロアを記録する。全エコーボスを
+    1体ずつ撃破し終えたら、称号"Echomaster"と一度きりの永続ボーナスを与える。"""
+    global pl_lifemax, pl_life
+    data = load_achievements()
+    defeated = set(data.get("echo_floors_defeated", []))
+    defeated.add(fl)
+    data["echo_floors_defeated"] = sorted(defeated)
+    already_mastered = data.get("echo_master", False)
+    save_achievements(data)
+    if not already_mastered and defeated.issuperset(ECHO_ELIGIBLE_FLOORS):
+        pl_lifemax += 50
+        pl_life += 50
+        unlock_achievement("echo_master")
+
 def boss_name_for_floor(fl):
     """ボスの表示名をフロア番号から算出する(init_boss_battleと図鑑の両方から使う共通ロジック)"""
     stg = current_stage(fl)
@@ -4100,6 +4120,7 @@ def main():
     global daily_mode
     global daily_start_requested
     global hero_start_requested
+    global achievements_scroll
     global selected_character
     global pending_bonus_room
     global playtime_ms_accum
@@ -4250,9 +4271,15 @@ def main():
                 if event.key == K_v and idx == 45:
                     idx = 33
                     tmr = 0
+                    achievements_scroll = 0
                 if event.key == K_ESCAPE and idx == 33:
                     idx = 45
                     tmr = 0
+                # 実績一覧が画面に収まらないため、Up/Downでスクロールする
+                if idx == 33 and event.key in (K_UP, K_DOWN):
+                    max_scroll = max(0, len(ACHIEVEMENT_DEFS) - ACHIEVEMENTS_VISIBLE_ROWS)
+                    step = -1 if event.key == K_UP else 1
+                    achievements_scroll = min(max_scroll, max(0, achievements_scroll + step))
                 # 記録メニュー内でXキーによりプレイ統計を開く
                 if event.key == K_x and idx == 45:
                     idx = 43
@@ -5142,19 +5169,24 @@ def main():
 
         elif idx == 33:
             # 実績一覧(タイトル画面に重ねて表示)
+            # 実績数が画面の縦幅に収まらないため、Up/Downで縦スクロールするページ表示にする。
             screen.fill(BLACK)
             screen.blit(imgTitle, [-50, 80])
             panel = pygame.Surface((880, 560))
             panel.set_alpha(170)
             panel.fill(BLACK)
             screen.blit(panel, [0, 140])
-            draw_text(screen, "Achievements", 320, 155, font, WHITE)
             ach = load_achievements()
+            total_c = len(ACHIEVEMENT_DEFS)
+            earned_c = sum(1 for key_name, _ in ACHIEVEMENT_DEFS if ach.get(key_name, False))
+            draw_text(screen, "Achievements", 320, 155, font, WHITE)
+            draw_text(screen, f"{earned_c}/{total_c} earned", 600, 162, fontS, (150, 220, 255))
             BADGE_SIZE = 26
             ROW_H = 32
             START_Y = 195
             badge_disp = get_achievement_badge_image(BADGE_SIZE)
-            for i, (key_name, label) in enumerate(ACHIEVEMENT_DEFS):
+            visible = ACHIEVEMENT_DEFS[achievements_scroll:achievements_scroll + ACHIEVEMENTS_VISIBLE_ROWS]
+            for i, (key_name, label) in enumerate(visible):
                 done = ach.get(key_name, False)
                 row_y = START_Y + i*ROW_H
                 if done:
@@ -5164,8 +5196,14 @@ def main():
                 col = (255, 215, 0) if done else (150, 150, 150)
                 draw_text(screen, label, 130 + BADGE_SIZE + 10, row_y, fontS, col)
             trap_c = ach.get("trap_count", 0)
-            draw_text(screen, f"Traps triggered: {trap_c}", 130, START_Y + len(ACHIEVEMENT_DEFS)*ROW_H + 10, fontS, WHITE)
-            draw_text(screen, "[Esc] Back", 340, 660, fontS, WHITE)
+            list_bottom_y = START_Y + ACHIEVEMENTS_VISIBLE_ROWS*ROW_H + 10
+            draw_text(screen, f"Traps triggered: {trap_c}", 130, list_bottom_y, fontS, WHITE)
+            if total_c > ACHIEVEMENTS_VISIBLE_ROWS:
+                shown_to = min(achievements_scroll + ACHIEVEMENTS_VISIBLE_ROWS, total_c)
+                draw_text(screen, f"{achievements_scroll+1}-{shown_to} of {total_c}   [Up/Down] Scroll   [Esc] Back",
+                          130, 660, fontS, WHITE)
+            else:
+                draw_text(screen, "[Esc] Back", 340, 660, fontS, WHITE)
 
         elif idx == 2:
             draw_dungeon(screen, fontS)
@@ -6011,6 +6049,7 @@ def main():
                 pl_def_base += 3
                 unlock_achievement("echo_hunter")
                 record_stat("echoes_defeated")
+                register_echo_boss_defeat(echo_target_floor)
                 in_echo_battle = False
             screen.fill(BLACK)
             screen.blit(imgTitle, [-50, 80])
