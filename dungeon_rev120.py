@@ -4272,7 +4272,7 @@ def main():
                     idx = 52
                     tmr = 0
                 if idx == 52:
-                    echo_key_map = {K_1: 0, K_2: 1, K_3: 2, K_4: 3, K_5: 4, K_6: 5, K_7: 6, K_8: 7}
+                    echo_key_map = {K_1: 0, K_2: 1, K_3: 2, K_4: 3, K_5: 4, K_6: 5, K_7: 6, K_8: 7, K_9: 8}
                     if event.key in echo_key_map and echo_key_map[event.key] < len(ECHO_ELIGIBLE_FLOORS):
                         target_fl = ECHO_ELIGIBLE_FLOORS[echo_key_map[event.key]]
                         bi = boss_bestiary_index_for_floor(target_fl)
@@ -5860,7 +5860,7 @@ def main():
                 col = (120, 200, 255) if seen else (110, 110, 110)
                 draw_text(screen, label, 130, y, fontS, col)
                 y += 32
-            draw_text(screen, "[1-8] Challenge   [Esc] Back", 250, 590, fontS, WHITE)
+            draw_text(screen, "[1-9] Challenge   [Esc] Back", 250, 590, fontS, WHITE)
 
         elif idx == 53:
             # デイリーチャレンジのランキング(自己ベストの履歴を日付順ではなく
