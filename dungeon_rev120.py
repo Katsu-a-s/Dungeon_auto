@@ -1,8 +1,14 @@
 import pygame
-import sys 
+import sys
 import random
 import json
 from pygame.locals import *
+
+def _log_io_error(context, err):
+    """セーブ/ロード関連のI/Oエラーはプレイ継続を優先してこれまで黙って
+    握りつぶしていたが、原因不明のままだと再現・調査ができないため、
+    最低限stderrには残す(プレイヤー向けの画面表示は呼び出し元が別途行う)。"""
+    print(f"[dungeon] I/O error in {context}: {err!r}", file=sys.stderr)
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -483,8 +489,8 @@ def save_daily_record(data):
     try:
         with open("daily.json", "w") as f:
             json.dump(data, f)
-    except Exception:
-        pass
+    except Exception as e:
+        _log_io_error("save_daily_record", e)
 
 def record_daily_result(floor_reached, cleared):
     data = load_daily_record()
@@ -835,6 +841,8 @@ def is_boss_floor(fl):
 _achievements_cache = None
 achievements_scroll = 0
 ACHIEVEMENTS_VISIBLE_ROWS = 13
+stats_scroll = 0
+STATS_VISIBLE_ROWS = 18
 
 def load_achievements():
     """achievements.jsonはタイトル画面や実績一覧など複数の描画箇所から毎フレーム
@@ -861,8 +869,8 @@ def save_achievements(data):
     try:
         with open("achievements.json", "w") as f:
             json.dump(data, f)
-    except Exception:
-        pass
+    except Exception as e:
+        _log_io_error("save_achievements", e)
 
 ACHIEVEMENT_LABELS = dict(ACHIEVEMENT_DEFS)
 
@@ -963,8 +971,8 @@ def save_stats(data):
     try:
         with open("stats.json", "w") as f:
             json.dump(data, f)
-    except Exception:
-        pass
+    except Exception as e:
+        _log_io_error("save_stats", e)
 
 def record_stat(key, amount=1):
     data = load_stats()
@@ -1014,8 +1022,8 @@ def save_bestiary(data):
     try:
         with open("bestiary.json", "w") as f:
             json.dump(data, f)
-    except Exception:
-        pass
+    except Exception as e:
+        _log_io_error("save_bestiary", e)
 
 def record_enemy_seen(typ_idx):
     if not (0 <= typ_idx < len(EMY_NAME)):
@@ -3956,8 +3964,14 @@ def get_save_data():
     
 def save_game(filename="savefile.json"):
     global info_message, info_timer
-    with open(filename, "w") as f:
-        json.dump(get_save_data(), f)
+    try:
+        with open(filename, "w") as f:
+            json.dump(get_save_data(), f)
+    except Exception as e:
+        _log_io_error(f"save_game({filename})", e)
+        info_message = "Failed to save game."
+        info_timer = 60
+        return
     info_message = "Game saved."
     info_timer = 60
     _slot_floor_cache.clear()
@@ -4043,14 +4057,23 @@ def load_game(filename="savefile.json"):
         info_message = "Game loaded."
         info_timer = 45
     except Exception as e:
+        _log_io_error("load_game", e)
         info_message = "Failed to load game."
         info_timer = 45
 
 def autosave():
-    """フロア移動時などに自動でオートセーブ枠へ保存する"""
+    """フロア移動時などに自動でオートセーブ枠へ保存する。ディスク書き込みに
+    失敗しても(ディスク満杯・権限エラー等)ゲーム進行中の他の処理を巻き込んで
+    クラッシュさせないよう、ここで例外を吸収してユーザーに知らせるだけにする。"""
     global info_message, info_timer, _autosave_floor_cache
-    with open("autosave.json", "w") as f:
-        json.dump(get_save_data(), f)
+    try:
+        with open("autosave.json", "w") as f:
+            json.dump(get_save_data(), f)
+    except Exception as e:
+        _log_io_error("autosave()", e)
+        info_message = "Auto save failed."
+        info_timer = 40
+        return
     info_message = "Auto saved."
     info_timer = 40
     _autosave_floor_cache = _UNSET
@@ -4121,6 +4144,7 @@ def main():
     global daily_start_requested
     global hero_start_requested
     global achievements_scroll
+    global stats_scroll
     global selected_character
     global pending_bonus_room
     global playtime_ms_accum
@@ -4284,9 +4308,15 @@ def main():
                 if event.key == K_x and idx == 45:
                     idx = 43
                     tmr = 0
+                    stats_scroll = 0
                 if event.key == K_ESCAPE and idx == 43:
                     idx = 45
                     tmr = 0
+                # プレイ統計一覧が画面に収まらないため、Up/Downでスクロールする
+                if idx == 43 and event.key in (K_UP, K_DOWN):
+                    max_scroll = max(0, len(STATS_DEFS) + 1 - STATS_VISIBLE_ROWS)
+                    step = -1 if event.key == K_UP else 1
+                    stats_scroll = min(max_scroll, max(0, stats_scroll + step))
                 # 記録メニュー内でBキーにより図鑑(Bestiary)を開く
                 if event.key == K_b and idx == 45:
                     idx = 46
@@ -6175,6 +6205,8 @@ def main():
 
         elif idx == 43:
             # プレイ統計(タイトル画面に重ねて表示)
+            # STATS_DEFS全項目(+トラップ数)を表示する。項目数が画面に収まらないため、
+            # 実績一覧と同じくUp/Downでスクロールするページ表示にする。
             screen.fill(BLACK)
             screen.blit(imgTitle, [-50, 80])
             panel = pygame.Surface((880, 520))
@@ -6184,29 +6216,19 @@ def main():
             draw_text(screen, "Play Statistics", 300, 163, font, WHITE)
             st = load_stats()
             ach_for_traps = load_achievements()
-            rows = [
-                ("Total play time", format_playtime(st.get("total_playtime_ms", 0))),
-                ("Enemies defeated", str(st.get("total_kills", 0))),
-                ("Bosses defeated", str(st.get("bosses_defeated_count", 0))),
-                ("Treasure chests opened", str(st.get("treasures_opened", 0))),
-                ("Traps triggered", str(ach_for_traps.get("trap_count", 0))),
-                ("Deaths", str(st.get("total_deaths", 0))),
-                ("Total floors descended", str(st.get("total_floors_descended", 0))),
-                ("Times game cleared", str(st.get("runs_completed", 0))),
-                ("Merchant trades made", str(st.get("merchant_trades", 0))),
-                ("Echo battles won", str(st.get("echoes_defeated", 0))),
-                ("Elite monsters defeated", str(st.get("elites_defeated", 0))),
-                ("Floors fully explored", str(st.get("floors_fully_explored", 0))),
-                ("Golden slimes caught", str(st.get("golden_sprites_caught", 0))),
-                ("Collapsing vaults escaped", str(st.get("vaults_escaped", 0))),
-                ("Monster dens cleared", str(st.get("dens_cleared", 0))),
-                ("Boulders outrun", str(st.get("boulders_dodged", 0))),
-                ("Shrines gambled at", str(st.get("shrines_used", 0))),
-                ("Blood Moon floors survived", str(st.get("blood_moons_survived", 0))),
-            ]
-            for i, (label, value) in enumerate(rows):
+            rows = [(label, (format_playtime(st.get(key, 0)) if key == "total_playtime_ms" else str(st.get(key, 0))))
+                    for key, label in STATS_DEFS]
+            rows.append(("Traps triggered", str(ach_for_traps.get("trap_count", 0))))
+            total_c = len(rows)
+            visible = rows[stats_scroll:stats_scroll + STATS_VISIBLE_ROWS]
+            for i, (label, value) in enumerate(visible):
                 draw_text(screen, f"{label}: {value}", 130, 190 + i*24, fontS, WHITE)
-            draw_text(screen, "[Esc] Back", 340, 630, fontS, WHITE)
+            if total_c > STATS_VISIBLE_ROWS:
+                shown_to = min(stats_scroll + STATS_VISIBLE_ROWS, total_c)
+                draw_text(screen, f"{stats_scroll+1}-{shown_to} of {total_c}   [Up/Down] Scroll   [Esc] Back",
+                          130, 630, fontS, WHITE)
+            else:
+                draw_text(screen, "[Esc] Back", 340, 630, fontS, WHITE)
 
         draw_text(screen, "[S]peed" + str(speed), 740, 40, fontS, WHITE)
         if idx != 1:
