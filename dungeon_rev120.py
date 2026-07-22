@@ -157,6 +157,25 @@ imgPlayerSets = {
 imgEffect = [pygame.image.load("image/effect_a.png"),
              pygame.image.load("image/effect_b.png")]
 
+def _convert_loaded_images():
+    """起動時に読み込んだimg*系のSurfaceを、画面のピクセルフォーマットに
+    一括で変換(convert_alpha)しておく。未変換のSurfaceは毎回blit時に暗黙の
+    フォーマット変換が走って遅くなるため、pygame.display.set_mode()の直後に
+    一度だけ呼ぶ(display作成前はconvert_alpha()できないのでモジュール読み込み
+    時点では行えない)。imgPlayerSetsのようなlist/dictのネストにも対応する。"""
+    def conv(obj):
+        if isinstance(obj, pygame.Surface):
+            return obj.convert_alpha()
+        elif isinstance(obj, list):
+            return [conv(o) for o in obj]
+        elif isinstance(obj, dict):
+            return {k: conv(v) for k, v in obj.items()}
+        return obj
+    g = globals()
+    for name in list(g.keys()):
+        if name.startswith("img"):
+            g[name] = conv(g[name])
+
 speed = 6
 idx = 0
 tmr = 0
@@ -773,13 +792,23 @@ TITLE_DEFS = [
     ("chimera_slain",      "the Chimera Slayer"),
 ]
 
+_current_title_cache = ""
+_current_title_dirty = True
+
 def current_title():
-    """解除済みの実績のうち、最も優先度の高い称号を返す(何も無ければ空文字)"""
-    data = load_achievements()
-    for key, title in TITLE_DEFS:
-        if data.get(key, False):
-            return title
-    return ""
+    """解除済みの実績のうち、最も優先度の高い称号を返す(何も無ければ空文字)
+    achievements.jsonへのディスクアクセスを避けるため、unlock_achievement()で
+    実績が更新された時だけ再計算するキャッシュを使う。"""
+    global _current_title_cache, _current_title_dirty
+    if _current_title_dirty:
+        data = load_achievements()
+        _current_title_cache = ""
+        for key, title in TITLE_DEFS:
+            if data.get(key, False):
+                _current_title_cache = title
+                break
+        _current_title_dirty = False
+    return _current_title_cache
 
 # --- スタート時のキャラクター選択 ---
 CHARACTER_TYPES = {
@@ -801,29 +830,50 @@ def char_params():
 def is_boss_floor(fl):
     return fl >= BOSS_FLOOR_INTERVAL and fl % BOSS_FLOOR_INTERVAL == 0
 
+_achievements_cache = None
+
 def load_achievements():
-    try:
-        with open("achievements.json", "r") as f:
-            data = json.load(f)
-    except Exception:
-        data = {}
-    for key, _ in ACHIEVEMENT_DEFS:
-        data.setdefault(key, False)
-    data.setdefault("trap_count", 0)
-    return data
+    """achievements.jsonはタイトル画面や実績一覧など複数の描画箇所から毎フレーム
+    呼ばれるため、一度読み込んだらプロセス内キャッシュを使い、save_achievements()
+    で書き込む時だけ更新する。呼び出し側が戻り値を書き換えてもキャッシュ自体は
+    汚さないようコピーを返す。"""
+    global _achievements_cache
+    if _achievements_cache is None:
+        try:
+            with open("achievements.json", "r") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+        for key, _ in ACHIEVEMENT_DEFS:
+            data.setdefault(key, False)
+        data.setdefault("trap_count", 0)
+        _achievements_cache = data
+    return dict(_achievements_cache)
 
 def save_achievements(data):
+    global _achievements_cache
+    _achievements_cache = dict(data)
     try:
         with open("achievements.json", "w") as f:
             json.dump(data, f)
     except Exception:
         pass
 
+ACHIEVEMENT_LABELS = dict(ACHIEVEMENT_DEFS)
+
 def unlock_achievement(key):
+    """実績を解除する。以前は解除してもプレイヤーには何の合図もなく、
+    後でRecords→Achievements画面を開くまで気づけなかったため、
+    新規解除時はinfo_messageでトーストのように知らせる。"""
+    global _current_title_dirty, info_message, info_timer
     data = load_achievements()
     if not data.get(key, False):
         data[key] = True
         save_achievements(data)
+        _current_title_dirty = True
+        label = ACHIEVEMENT_LABELS.get(key, key)
+        info_message = f"Achievement unlocked: {label}!"
+        info_timer = 90
 
 def add_trap_count(n=1):
     data = load_achievements()
@@ -885,17 +935,26 @@ def flush_playtime():
         record_stat("total_playtime_ms", playtime_ms_accum)
         playtime_ms_accum = 0
 
+_stats_cache = None
+
 def load_stats():
-    try:
-        with open("stats.json", "r") as f:
-            data = json.load(f)
-    except Exception:
-        data = {}
-    for key, _ in STATS_DEFS:
-        data.setdefault(key, 0)
-    return data
+    """stats.jsonも記録画面や各種条件チェックから頻繁に呼ばれるので、achievements
+    と同じくプロセス内キャッシュ+コピー返却にしてディスクI/Oを1回だけにする。"""
+    global _stats_cache
+    if _stats_cache is None:
+        try:
+            with open("stats.json", "r") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+        for key, _ in STATS_DEFS:
+            data.setdefault(key, 0)
+        _stats_cache = data
+    return dict(_stats_cache)
 
 def save_stats(data):
+    global _stats_cache
+    _stats_cache = dict(data)
     try:
         with open("stats.json", "w") as f:
             json.dump(data, f)
@@ -918,25 +977,35 @@ def format_playtime(ms):
 
 # --- 発見ログ/図鑑(Bestiary) ---
 # 出会った敵・見つけたアイテムを記録し、タイトル画面の記録メニューから確認できる。
+_bestiary_cache = None
+
 def load_bestiary():
-    try:
-        with open("bestiary.json", "r") as f:
-            data = json.load(f)
-    except Exception:
-        data = {}
-    data.setdefault("enemies", [False] * len(EMY_NAME))
-    data.setdefault("items", [False] * len(TRE_NAME))
-    data.setdefault("bosses", [False] * len(BOSS_BESTIARY))
-    # 敵/アイテム/ボスの種類が増えた場合に備えて長さを合わせる
-    if len(data["enemies"]) < len(EMY_NAME):
-        data["enemies"] += [False] * (len(EMY_NAME) - len(data["enemies"]))
-    if len(data["items"]) < len(TRE_NAME):
-        data["items"] += [False] * (len(TRE_NAME) - len(data["items"]))
-    if len(data["bosses"]) < len(BOSS_BESTIARY):
-        data["bosses"] += [False] * (len(BOSS_BESTIARY) - len(data["bosses"]))
-    return data
+    """bestiary.jsonも図鑑画面などから毎フレーム呼ばれるので、achievements/statsと
+    同じくプロセス内キャッシュ+コピー返却にする(内側のリストはコピーし直して、
+    呼び出し側のin-place更新がキャッシュに漏れないようにする)。"""
+    global _bestiary_cache
+    if _bestiary_cache is None:
+        try:
+            with open("bestiary.json", "r") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+        data.setdefault("enemies", [False] * len(EMY_NAME))
+        data.setdefault("items", [False] * len(TRE_NAME))
+        data.setdefault("bosses", [False] * len(BOSS_BESTIARY))
+        # 敵/アイテム/ボスの種類が増えた場合に備えて長さを合わせる
+        if len(data["enemies"]) < len(EMY_NAME):
+            data["enemies"] += [False] * (len(EMY_NAME) - len(data["enemies"]))
+        if len(data["items"]) < len(TRE_NAME):
+            data["items"] += [False] * (len(TRE_NAME) - len(data["items"]))
+        if len(data["bosses"]) < len(BOSS_BESTIARY):
+            data["bosses"] += [False] * (len(BOSS_BESTIARY) - len(data["bosses"]))
+        _bestiary_cache = data
+    return {k: (list(v) if isinstance(v, list) else v) for k, v in _bestiary_cache.items()}
 
 def save_bestiary(data):
+    global _bestiary_cache
+    _bestiary_cache = {k: (list(v) if isinstance(v, list) else v) for k, v in data.items()}
     try:
         with open("bestiary.json", "w") as f:
             json.dump(data, f)
@@ -1889,6 +1958,29 @@ REGULAR_ENEMY_IMAGE_OVERRIDE = {
 def enemy_image_file(t):
     return REGULAR_ENEMY_IMAGE_OVERRIDE.get(t, f"enemy{t}.png")
 
+# 敵/ボス画像は種類数が限られているのに、戦闘開始のたびpygame.image.load()で
+# ディスクから読み直していたのでキャッシュする(初回だけ読み込んでconvert_alpha)
+_enemy_image_cache = {}
+
+def load_enemy_image(relpath):
+    img = _enemy_image_cache.get(relpath)
+    if img is None:
+        img = pygame.image.load("image/" + relpath).convert_alpha()
+        _enemy_image_cache[relpath] = img
+    return img
+
+_achievement_badge_cache = {}
+_bestiary_detail_scale_cache = {}
+
+def get_achievement_badge_image(size):
+    """実績バッジ画像は毎フレーム同じ結果になるので、サイズごとにsmoothscale結果を
+    キャッシュしておく(実績一覧画面は描画のたびに再スケールしていた)"""
+    img = _achievement_badge_cache.get(size)
+    if img is None:
+        img = pygame.transform.smoothscale(imgAchBadge, (size, size))
+        _achievement_badge_cache[size] = img
+    return img
+
 # --- ボス撃破後のドロップ演出 ---
 # 永続強化とは別に、その場で使えるアイテムを2種類ランダムに授与し、
 # 撃破画面の途中でアイコン付きで1つずつ表示する。
@@ -1917,6 +2009,20 @@ explored = []
 for y in range(DUNGEON_H):
     explored.append([False]*DUNGEON_W)
 
+# exploration_percent()を毎フレームのダンジョン全マス走査にしないための集計値。
+# make_dungeon()でフロアごとにtotalを出し直し、_mark_explored()でseenを差分更新する。
+_exploration_total = 0
+_exploration_seen = 0
+
+def _mark_explored(x, y):
+    """explored[y][x]をTrueにする。新規に探索済みになったマスだけ_exploration_seenを増やす"""
+    global _exploration_seen
+    if not (0 <= x < DUNGEON_W and 0 <= y < DUNGEON_H) or explored[y][x]:
+        return
+    explored[y][x] = True
+    if dungeon[y][x] not in (9, 25):
+        _exploration_seen += 1
+
 def maze_size_for_floor(fl):
     """フロアが深くなるほどマップを大きくする(3フロアごとに1段階拡張、上限あり)。
     難易度でサイズの伸び方に補正がかかる(Easy=小さめ、Hard=大きめ)"""
@@ -1934,18 +2040,12 @@ EXPLORATION_BONUS_THRESHOLD = 85   # この%以上でボーナス
 EXPLORATION_PERFECT_THRESHOLD = 97  # この%以上でさらに豪華なボーナス
 
 def exploration_percent():
-    """現在のフロアで、壁(9)以外の歩ける床のうち探索済み(explored=True)の割合(%)"""
-    total = 0
-    seen = 0
-    for y in range(DUNGEON_H):
-        for x in range(DUNGEON_W):
-            if dungeon[y][x] not in (9, 25):
-                total += 1
-                if explored[y][x]:
-                    seen += 1
-    if total == 0:
+    """現在のフロアで、壁(9)以外の歩ける床のうち探索済み(explored=True)の割合(%)
+    毎フレームの全マス走査を避けるため、_exploration_total/_exploration_seenの
+    集計値(make_dungeon()で初期化、_mark_explored()で更新)を使う"""
+    if _exploration_total == 0:
         return 0
-    return int(100 * seen / total)
+    return int(100 * _exploration_seen / _exploration_total)
 
 def make_dungeon():
     global MAZE_W, MAZE_H, DUNGEON_W, DUNGEON_H, maze, dungeon, explored, hidden_treasure_pos
@@ -2081,6 +2181,10 @@ def make_dungeon():
     if floor >= 8 and random.randint(0, 99) < CHIMERA_CHANCE:
         place_chimera_lair()
 
+    global _reveal_radius_last, _minimap_cache_surface
+    _reveal_radius_last = None
+    _minimap_cache_surface = None
+
 # ワープ床・回復の泉・呪いの床・罠の床・氷の床・モンスターの巣・黄金の像・祠・
 # 囚われの仲間・不安定な裂け目・犠牲の祭壇・圧力プレート・封印された扉は、
 # 同じ種類同士・異なる種類同士を問わず隣接マスに並ばないようにする
@@ -2184,8 +2288,10 @@ def carve_cursed_room():
     x, y = random.choice(candidates)
     dungeon[y][x] = 13
 
-def place_warp_tile():
-    """既存の床1マスをワープ床(11)にする。他の特殊床とは隣接しない位置を選ぶ"""
+def _place_single_special_tile(tile_id):
+    """『他の特殊床と隣接しない空いている床を1つ選んでtile_idにする』という、
+    15個のplace_*関数に共通する処理をまとめた共通ヘルパー。
+    候補が無ければ何もしない(元の各関数と同じ)。"""
     candidates = []
     for y in range(2, DUNGEON_H-2):
         for x in range(2, DUNGEON_W-2):
@@ -2194,100 +2300,48 @@ def place_warp_tile():
     if not candidates:
         return
     x, y = random.choice(candidates)
-    dungeon[y][x] = 11
+    dungeon[y][x] = tile_id
+
+def place_warp_tile():
+    """既存の床1マスをワープ床(11)にする。他の特殊床とは隣接しない位置を選ぶ"""
+    _place_single_special_tile(11)
 
 def place_merchant():
     """既存の床1マスに旅の商人(17)を配置する。他の特殊床とは隣接しない位置を選ぶ。
     踏むと一度だけ簡易な取引ができ、その後タイルは消える。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 17
+    _place_single_special_tile(17)
 
 def place_monster_den():
     """既存の床1マスにモンスターの巣(18)を配置する。他の特殊床とは隣接しない位置を選ぶ。
     踏むと3体の敵と連続で戦う羽目になる代わりに、全て倒し切れば豪華な報酬がもらえる。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 18
+    _place_single_special_tile(18)
 
 def place_idol_pedestal():
     """既存の床1マスに黄金の像の台座(19)を配置する。他の特殊床とは隣接しない位置を選ぶ。
     像を持ち上げると即座に報酬が手に入る代わりに、その場から巨石が転がって追いかけてくる。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 19
+    _place_single_special_tile(19)
 
 def place_shrine():
     """既存の床1マスに運命の祠(20)を配置する。他の特殊床とは隣接しない位置を選ぶ。
     踏むと一度だけ運試しができる、一発勝負のギャンブル床。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 20
+    _place_single_special_tile(20)
 
 def place_captive():
     """既存の床1マスに囚われの仲間(21)を配置する。他の特殊床とは隣接しない位置を選ぶ。
     檻を壊して助け出すと、そのフロアの間だけ一緒に戦ってくれる仲間の力を借りられる
     (STR/DEFが一時的に上昇する)。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 21
+    _place_single_special_tile(21)
 
 def place_rift():
     """既存の床1マスに不安定な裂け目(22)を配置する。他の特殊床とは隣接しない位置を選ぶ。
     足を踏み入れると必ず強力な(エリート)敵との戦闘になる代わりに、
     勝てば通常より豪華な報酬がもらえるハイリスク・ハイリターンの床。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 22
+    _place_single_special_tile(22)
 
 def place_altar():
     """既存の床1マスに犠牲の祭壇(23)を配置する。他の特殊床とは隣接しない位置を選ぶ。
     HPを捧げるかどうかをプレイヤー自身が選べる、任意参加のギャンブル床。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 23
+    _place_single_special_tile(23)
 
 def place_puzzle_door():
     """既存の床2マスに、圧力プレート(24)と封印された扉(25)を1組配置する。
@@ -2310,99 +2364,35 @@ def place_puzzle_door():
 def place_spirit():
     """既存の床1マスにさまよう精霊(26)を配置する。他の特殊床とは隣接しない位置を選ぶ。
     3つの祝福候補からプレイヤーが1つを選べる。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 26
+    _place_single_special_tile(26)
 
 def place_bounty_board():
     """既存の床1マスに賞金首の掲示板(27)を配置する。他の特殊床とは隣接しない位置を選ぶ。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 27
+    _place_single_special_tile(27)
 
 def place_totem():
     """既存の床1マスに精霊の祭具(28)を配置する。他の特殊床とは隣接しない位置を選ぶ。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 28
+    _place_single_special_tile(28)
 
 def place_mirror():
     """既存の床1マスに分身の鏡(29)を配置する。他の特殊床とは隣接しない位置を選ぶ。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 29
+    _place_single_special_tile(29)
 
 def place_statue():
     """既存の床1マスに守護者の像(33)を配置する。他の特殊床とは隣接しない位置を選ぶ。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 33
+    _place_single_special_tile(33)
 
 def place_gambling_den():
     """既存の床1マスに賭博場(34)を配置する。他の特殊床とは隣接しない位置を選ぶ。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 34
+    _place_single_special_tile(34)
 
 def place_chimera_lair():
     """既存の床1マスにキメラの巣(35)を配置する。他の特殊床とは隣接しない位置を選ぶ。"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 35
+    _place_single_special_tile(35)
 
 def place_healing_spring():
     """既存の床1マスを回復の泉(12)にする。他の特殊床とは隣接しない位置を選ぶ"""
-    candidates = []
-    for y in range(2, DUNGEON_H-2):
-        for x in range(2, DUNGEON_W-2):
-            if dungeon[y][x] == 0 and not has_adjacent_special(x, y):
-                candidates.append((x, y))
-    if not candidates:
-        return
-    x, y = random.choice(candidates)
-    dungeon[y][x] = 12
+    _place_single_special_tile(12)
 
 def place_ice_patch():
     """氷の床(16)を3〜6マスの直線状にまとめて配置する。氷に乗ると
@@ -2458,7 +2448,7 @@ def draw_dungeon(bg, fnt):
             dx = pl_x + x
             dy = pl_y + y
             if 0 <= dx < DUNGEON_W and 0 <= dy < DUNGEON_H:
-                explored[dy][dx] = True
+                _mark_explored(dx, dy)
                 tv = dungeon[dy][dx]
                 if tv <= 4:
                     if tv == 0 and floor_variant == 1:
@@ -2742,7 +2732,7 @@ def draw_dungeon(bg, fnt):
 def reveal_hidden_adjacent():
     """プレイヤーが隠し壁(10)に隣接したら、自動的に通れる床(0)にし、
     その裏に隠していた宝箱も同時に出現させる"""
-    global hidden_treasure_pos
+    global hidden_treasure_pos, _exploration_total, _exploration_seen
     for dxn, dyn in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         xx, yy = pl_x + dxn, pl_y + dyn
         if 0 <= xx < DUNGEON_W and 0 <= yy < DUNGEON_H and dungeon[yy][xx] == 10:
@@ -2751,12 +2741,25 @@ def reveal_hidden_adjacent():
                 bx, by = hidden_treasure_pos
                 dungeon[by][bx] = 1
                 hidden_treasure_pos = None
+                # この宝箱マスは今まで壁(9)扱いでexploration_percent()の集計から
+                # 除外されていたため、床になった今、集計に組み込む
+                _exploration_total += 1
+                if explored[by][bx]:
+                    _exploration_seen += 1
+
+_reveal_radius_last = None
 
 def reveal_radius(radius):
     """プレイヤー周辺の(見た目の描画範囲とは別に)ミニマップ上の探索済み範囲を広げる。
-    難易度のvision_radius_bonusで広さが変わる"""
+    難易度のvision_radius_bonusで広さが変わる。プレイヤーが動いていない間は
+    同じマス集合を毎フレーム塗り直すだけなので、位置と半径が前回と同じならスキップする"""
+    global _reveal_radius_last
     if radius <= 0:
         return
+    state = (pl_x, pl_y, radius)
+    if state == _reveal_radius_last:
+        return
+    _reveal_radius_last = state
     for dy in range(-radius, radius+1):
         for dx in range(-radius, radius+1):
             if abs(dx) + abs(dy) > radius:
@@ -2764,14 +2767,23 @@ def reveal_radius(radius):
             yy = pl_y + dy
             xx = pl_x + dx
             if 0 <= xx < DUNGEON_W and 0 <= yy < DUNGEON_H:
-                explored[yy][xx] = True
+                _mark_explored(xx, yy)
     
 MINIMAP_RIGHT = 860
 MINIMAP_Y = 95
 MINIMAP_MAXW = 220
 MINIMAP_MAXH = 460
 
+# ミニマップは毎フレームDUNGEON_W*DUNGEON_H マス分fillし直すと重いので、
+# 探索済みマスの絵柄をオフスクリーンSurfaceにキャッシュしておき、数フレームに
+# 1回だけ(または新しく探索が進んだ時だけ)描き直す。プレイヤーの現在地マーカーは
+# 動き続けるので、キャッシュした地図の上から毎フレーム重ねて描く。
+_minimap_cache_surface = None
+_minimap_cache_key = None
+_minimap_rebuild_interval = 4
+
 def draw_minimap(bg):
+    global _minimap_cache_surface, _minimap_cache_key
     # マップが大きくなっても画面からはみ出さないよう、セルサイズを自動で縮小する
     cell = 4
     while DUNGEON_W*cell > MINIMAP_MAXW or DUNGEON_H*cell > MINIMAP_MAXH:
@@ -2783,30 +2795,40 @@ def draw_minimap(bg):
     y0 = MINIMAP_Y
     w = DUNGEON_W * cell
     h = DUNGEON_H * cell
+
+    cache_key = (DUNGEON_W, DUNGEON_H, cell)
+    if (_minimap_cache_surface is None or _minimap_cache_key != cache_key
+            or tmr % _minimap_rebuild_interval == 0):
+        surf = pygame.Surface((w, h))
+        surf.fill(BLACK)
+        for y in range(DUNGEON_H):
+            for x in range(DUNGEON_W):
+                if not explored[y][x]:
+                    continue
+                v = dungeon[y][x]
+                if v == 9 or v == 10:
+                    col = (90, 90, 90)
+                elif v == 3 or v == 15:
+                    col = (255, 255, 0)
+                elif v == 1:
+                    col = (0, 200, 200)
+                elif v == 2:
+                    col = (200, 80, 80)
+                elif v == 4:
+                    col = (255, 140, 0)
+                elif v == 16:
+                    col = (150, 220, 255)
+                elif v == 17:
+                    col = (255, 180, 60)
+                else:
+                    col = (180, 180, 180)
+                surf.fill(col, [x*cell, y*cell, cell, cell])
+        _minimap_cache_surface = surf
+        _minimap_cache_key = cache_key
+
     pygame.draw.rect(bg, BLACK, [x0-2, y0-2, w+4, h+4])
     pygame.draw.rect(bg, WHITE, [x0-2, y0-2, w+4, h+4], 1)
-    for y in range(DUNGEON_H):
-        for x in range(DUNGEON_W):
-            if not explored[y][x]:
-                continue
-            v = dungeon[y][x]
-            if v == 9 or v == 10:
-                col = (90, 90, 90)
-            elif v == 3 or v == 15:
-                col = (255, 255, 0)
-            elif v == 1:
-                col = (0, 200, 200)
-            elif v == 2:
-                col = (200, 80, 80)
-            elif v == 4:
-                col = (255, 140, 0)
-            elif v == 16:
-                col = (150, 220, 255)
-            elif v == 17:
-                col = (255, 180, 60)
-            else:
-                col = (180, 180, 180)
-            bg.fill(col, [x0+x*cell, y0+y*cell, cell, cell])
+    bg.blit(_minimap_cache_surface, [x0, y0])
     px = x0 + pl_x*cell
     py = y0 + pl_y*cell
     bg.fill(RED, [px, py, cell, cell])
@@ -2901,6 +2923,17 @@ def generate_bonus_room():
             break
         tries += 1
 
+    # ボーナス部屋も通常フロアと同じくdungeon/explored/サイズを丸ごと作り直すので、
+    # exploration_percent()用の集計値もここで出し直す(全マス最初から探索済み扱い)
+    global _exploration_total, _exploration_seen, _reveal_radius_last, _minimap_cache_surface
+    _exploration_total = sum(1 for row in dungeon for v in row if v not in (9, 25))
+    _exploration_seen = sum(
+        1 for y in range(DUNGEON_H) for x in range(DUNGEON_W)
+        if explored[y][x] and dungeon[y][x] not in (9, 25)
+    )
+    _reveal_radius_last = None
+    _minimap_cache_surface = None
+
 def put_event():
     global pl_x, pl_y, pl_d, pl_a
     place_stairs(stairs_count_for_floor())
@@ -2932,6 +2965,17 @@ def put_event():
     pl_d = 1
     pl_a = 2
     roll_golden_sprite()
+
+    # put_event()まで終わって初めてそのフロアの壁/床レイアウトが確定する
+    # (place_stairsが階段周りを強制的に床へ掘り直すため、make_dungeon()直後の
+    # 時点ではまだ総マス数が確定しない)。ここでexploration_percent()用の
+    # 集計値を出し直す。
+    global _exploration_total, _exploration_seen
+    _exploration_total = sum(1 for row in dungeon for v in row if v not in (9, 25))
+    _exploration_seen = sum(
+        1 for y in range(DUNGEON_H) for x in range(DUNGEON_W)
+        if explored[y][x] and dungeon[y][x] not in (9, 25)
+    )
 
 def move_player(key):
     global idx, tmr, pl_x, pl_y, pl_d, pl_a
@@ -3399,23 +3443,33 @@ def draw_text(bg, txt, x, y, fnt, col):
     sur = fnt.render(txt, True, col)
     bg.blit(sur, [x, y])
 
+_pet_icon_scaled_cache = {}
+
 def draw_pet_status(bg, x, y, fnt):
     """『Pet: 名前』の左側に小さなアイコンを添えて表示する。
     アイコンはテキストの行の高さに収まるよう自動で縮小する。
     一定間隔でrev画像(左右反転版)と入れ替えて、ペットが生きているように
-    ちょこちょこ向きを変える簡単なアイドルアニメーションにする。"""
-    if (tmr // 40) % 2 == 0:
-        icon = imgPet.get(pet_type)
-    else:
+    ちょこちょこ向きを変える簡単なアイドルアニメーションにする。
+    pet_typeが変わらない限りスケール済み画像は同じなので、smoothscale結果を
+    キャッシュして毎フレームの再生成を避ける。"""
+    rev = (tmr // 40) % 2 != 0
+    if rev:
         icon = imgPetRev.get(pet_type, imgPet.get(pet_type))
+    else:
+        icon = imgPet.get(pet_type)
     label = f"Pet: {PET_TYPES[pet_type]['name']}"
     text_x = x
     if icon is not None:
         line_h = fnt.size(label)[1]
         iw, ih = icon.get_width(), icon.get_height()
         if ih > line_h:
-            scale = line_h / ih
-            icon = pygame.transform.smoothscale(icon, (max(1, int(iw*scale)), line_h))
+            cache_key = (pet_type, rev, line_h)
+            scaled = _pet_icon_scaled_cache.get(cache_key)
+            if scaled is None:
+                scale = line_h / ih
+                scaled = pygame.transform.smoothscale(icon, (max(1, int(iw*scale)), line_h))
+                _pet_icon_scaled_cache[cache_key] = scaled
+            icon = scaled
         bg.blit(icon, [x, y])
         text_x = x + icon.get_width() + 6
     draw_text(bg, label, text_x, y, fnt, (150, 220, 255))
@@ -3472,7 +3526,7 @@ def init_battle():
         typ = 0
         lev = max(1, floor)
         emy_lv = lev
-        imgEnemy = pygame.image.load("image/enemy_mimic.png")
+        imgEnemy = load_enemy_image("enemy_mimic.png")
         emy_name = "Mimic LV" + str(lev)
         emy_lifemax = int((60 * 3 + (lev - 1) * 10) * MIMIC_LIFE_MULT)
         emy_str = int((emy_lifemax / 8) * MIMIC_STR_MULT)
@@ -3507,7 +3561,7 @@ def init_battle():
         typ = 0
         lev = max(1, floor)
         emy_lv = lev
-        imgEnemy = pygame.image.load("image/enemy_chimera.png")
+        imgEnemy = load_enemy_image("enemy_chimera.png")
         emy_name = "Chimera LV" + str(lev)
         dp = diff_params()
         emy_lifemax = max(1, int((250 + floor * 45) * dp["enemy_life_mult"]))
@@ -3535,7 +3589,7 @@ def init_battle():
     is_elite = random.randint(0, 99) < ELITE_CHANCE
     if in_rift_battle:
         is_elite = True  # 裂け目から出てくる敵は必ずエリート
-    imgEnemy = pygame.image.load("image/" + enemy_image_file(typ))
+    imgEnemy = load_enemy_image(enemy_image_file(typ))
     if is_elite:
         imgEnemy = tint_surface(imgEnemy, ELITE_TINT)
     emy_name = ("Elite " if is_elite else "") + EMY_NAME[typ]+" LV"+str(lev)
@@ -3624,7 +3678,7 @@ def init_boss_battle():
         emy_lifemax = int(emy_lifemax * 1.5)
         emy_str = int(emy_str * 1.3)
     emy_life = emy_lifemax
-    imgEnemy = pygame.image.load("image/" + boss_image_file(floor))
+    imgEnemy = load_enemy_image(boss_image_file(floor))
     emy_name = boss_name_for_floor(floor)
     emy_x = 440-imgEnemy.get_width()/2
     emy_y = 560-imgEnemy.get_height()
@@ -3652,7 +3706,7 @@ def init_hidden_boss_battle():
     emy_lifemax = max(1, int((900 + MAX_FLOOR*60) * 2.0 * dp["enemy_life_mult"]))
     emy_str = max(1, int((50 + MAX_FLOOR*7) * 1.6 * dp["enemy_str_mult"]))
     emy_life = emy_lifemax
-    imgEnemy = pygame.image.load("image/" + HIDDEN_BOSS_IMAGE)
+    imgEnemy = load_enemy_image(HIDDEN_BOSS_IMAGE)
     emy_name = "??? The Unbound"
     emy_x = 440-imgEnemy.get_width()/2
     emy_y = 560-imgEnemy.get_height()
@@ -3685,7 +3739,7 @@ def init_echo_boss_battle(target_floor):
     emy_lifemax = max(1, int((900 + target_floor*60) * dp["enemy_life_mult"]))
     emy_str = max(1, int((50 + target_floor*7) * dp["enemy_str_mult"]))
     emy_life = emy_lifemax
-    imgEnemy = pygame.image.load("image/" + ECHO_ORI_MAP[target_floor])
+    imgEnemy = load_enemy_image(ECHO_ORI_MAP[target_floor])
     emy_name = "Echo of " + boss_name_for_floor(target_floor)
     emy_x = 440-imgEnemy.get_width()/2
     emy_y = 560-imgEnemy.get_height()
@@ -3886,6 +3940,7 @@ def save_game(filename="savefile.json"):
         json.dump(get_save_data(), f)
     info_message = "Game saved."
     info_timer = 60
+    _slot_floor_cache.clear()
     
 def load_game(filename="savefile.json"):
     global floor, pl_x, pl_y, pl_d, pl_a, pl_lifemax, pl_life, pl_str, pl_lv, pl_exp, pl_exp_mult
@@ -3900,6 +3955,7 @@ def load_game(filename="savefile.json"):
     global wall_variant, floor_variant
     global _prev_patch_colors
     global selected_character
+    global _exploration_total, _exploration_seen, _reveal_radius_last, _minimap_cache_surface
     try:
         with open(filename, "r") as f:
             data = json.load(f)
@@ -3955,6 +4011,15 @@ def load_game(filename="savefile.json"):
         sc = data.get("selected_character", "warrior")
         selected_character = sc if sc in CHARACTER_TYPES else "warrior"
         in_boss_battle = False
+        # ロードでdungeon/exploredを丸ごと差し替えたので、exploration_percent()用の
+        # 集計値もセーブデータの内容に合わせて出し直す
+        _exploration_total = sum(1 for row in dungeon for v in row if v not in (9, 25))
+        _exploration_seen = sum(
+            1 for y in range(DUNGEON_H) for x in range(DUNGEON_W)
+            if explored[y][x] and dungeon[y][x] not in (9, 25)
+        )
+        _reveal_radius_last = None
+        _minimap_cache_surface = None
         info_message = "Game loaded."
         info_timer = 45
     except Exception as e:
@@ -3963,19 +4028,31 @@ def load_game(filename="savefile.json"):
 
 def autosave():
     """フロア移動時などに自動でオートセーブ枠へ保存する"""
-    global info_message, info_timer
+    global info_message, info_timer, _autosave_floor_cache
     with open("autosave.json", "w") as f:
         json.dump(get_save_data(), f)
     info_message = "Auto saved."
     info_timer = 40
+    _autosave_floor_cache = _UNSET
+
+# get_autosave_floor/get_slot_floor はセーブ/ロード/継続メニューが開いている間、
+# 毎フレーム(idx==0/30/31/44の描画やイベント判定)呼ばれる。ファイルの中身は
+# save_game()/autosave()が書き込んだ時しか変わらないので、結果をキャッシュして
+# 保存直後だけ無効化する(ディスクからの毎フレームJSON読み込みを避ける)。
+_UNSET = object()
+_autosave_floor_cache = _UNSET
+_slot_floor_cache = {}
 
 def get_autosave_floor():
-    try:
-        with open("autosave.json", "r") as f:
-            data = json.load(f)
-        return data.get("floor")
-    except Exception:
-        return None
+    global _autosave_floor_cache
+    if _autosave_floor_cache is _UNSET:
+        try:
+            with open("autosave.json", "r") as f:
+                data = json.load(f)
+            _autosave_floor_cache = data.get("floor")
+        except Exception:
+            _autosave_floor_cache = None
+    return _autosave_floor_cache
 
 SAVE_SLOTS = 3
 
@@ -3984,12 +4061,14 @@ def slot_filename(slot):
 
 def get_slot_floor(slot):
     """指定スロットのセーブデータのフロア数を返す。存在しない/壊れている場合はNone"""
-    try:
-        with open(slot_filename(slot), "r") as f:
-            data = json.load(f)
-        return data.get("floor")
-    except Exception:
-        return None
+    if slot not in _slot_floor_cache:
+        try:
+            with open(slot_filename(slot), "r") as f:
+                data = json.load(f)
+            _slot_floor_cache[slot] = data.get("floor")
+        except Exception:
+            _slot_floor_cache[slot] = None
+    return _slot_floor_cache[slot]
 
 def main():
     global speed, idx, tmr, floor, fl_max, welcome
@@ -4038,6 +4117,7 @@ def main():
     pygame.init()
     pygame.display.set_caption("Dungeon")
     screen = pygame.display.set_mode((880, 720))
+    _convert_loaded_images()
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 40)
     fontS = pygame.font.Font(None, 30)
@@ -4057,12 +4137,23 @@ def main():
                 pygame.quit()
                 sys.exit()
             if event.type == KEYDOWN:
-                # 初期画面・ダンジョン探索中はESCキーでゲームを終了する
-                # (セーブ/ロードメニュー中のESCはメニューを閉じる操作として扱うのでここでは対象外)
-                if event.key == K_ESCAPE and idx in (0, 1):
+                # タイトル画面のESCはそのまま終了。ダンジョン探索中は誤操作で
+                # 直前のオートセーブ以降の進行を失わないよう、確認画面(idx=55)を挟む
+                if event.key == K_ESCAPE and idx == 0:
                     flush_playtime()
                     pygame.quit()
                     sys.exit()
+                if event.key == K_ESCAPE and idx == 1:
+                    idx = 55
+                    tmr = 0
+                if idx == 55:
+                    if event.key == K_y:
+                        flush_playtime()
+                        pygame.quit()
+                        sys.exit()
+                    elif event.key in (K_n, K_ESCAPE):
+                        idx = 1
+                        tmr = 0
                 # ゲーム進行中(ダンジョン探索中)にQキーでセーブメニューを開く
                 if event.key == K_q and idx == 1:
                     idx = 30
@@ -4873,10 +4964,18 @@ def main():
             pygame.draw.rect(screen, WHITE, [frame_x, frame_y, frame_w, frame_h], 2)
             if bestiary_detail_seen and bestiary_detail_img is not None:
                 img = bestiary_detail_img
-                iw, ih = img.get_width(), img.get_height()
-                scale = min((frame_w-20)/iw, (frame_h-20)/ih) if iw > 0 and ih > 0 else 1.0
-                scale = min(max(scale, 0.1), 3.0)
-                disp_img = pygame.transform.smoothscale(img, (max(1, int(iw*scale)), max(1, int(ih*scale))))
+                # このスケール結果はbestiary_detail_imgが変わる(=別のモンスターを
+                # 選び直す)まで同じなので、id(img)をキーにキャッシュして
+                # smoothscaleの毎フレーム再実行を避ける
+                cache_key = (id(img), frame_w, frame_h)
+                disp_img = _bestiary_detail_scale_cache.get(cache_key)
+                if disp_img is None:
+                    iw, ih = img.get_width(), img.get_height()
+                    scale = min((frame_w-20)/iw, (frame_h-20)/ih) if iw > 0 and ih > 0 else 1.0
+                    scale = min(max(scale, 0.1), 3.0)
+                    disp_img = pygame.transform.smoothscale(img, (max(1, int(iw*scale)), max(1, int(ih*scale))))
+                    _bestiary_detail_scale_cache.clear()
+                    _bestiary_detail_scale_cache[cache_key] = disp_img
                 ix = frame_x + (frame_w - disp_img.get_width())//2
                 iy = frame_y + (frame_h - disp_img.get_height())//2
                 screen.blit(disp_img, [ix, iy])
@@ -4991,6 +5090,18 @@ def main():
                 stage_intro_timer = stage_intro_timer - 1
                 draw_text(screen, f"STAGE {stage_intro_num}", 330, 260, font, BLINK[tmr%6])
 
+        elif idx == 55:
+            # ダンジョン探索中にEscを押した時の終了確認(誤操作で未セーブの進行を
+            # 失わないようにするための確認ダイアログ)
+            draw_dungeon(screen, fontS)
+            overlay = pygame.Surface((880, 720))
+            overlay.set_alpha(180)
+            overlay.fill(BLACK)
+            screen.blit(overlay, [0, 0])
+            draw_text(screen, "Quit to desktop?", 300, 320, font, WHITE)
+            draw_text(screen, "Unsaved progress since the last save/autosave will be lost.", 130, 370, fontS, (220, 180, 100))
+            draw_text(screen, "[Y] Quit   [N/Esc] Cancel", 310, 420, fontS, WHITE)
+
         elif idx == 30:
             # セーブメニュー(ダンジョン画面に重ねて表示)
             draw_dungeon(screen, fontS)
@@ -5042,7 +5153,7 @@ def main():
             BADGE_SIZE = 26
             ROW_H = 32
             START_Y = 195
-            badge_disp = pygame.transform.smoothscale(imgAchBadge, (BADGE_SIZE, BADGE_SIZE))
+            badge_disp = get_achievement_badge_image(BADGE_SIZE)
             for i, (key_name, label) in enumerate(ACHIEVEMENT_DEFS):
                 done = ach.get(key_name, False)
                 row_y = START_Y + i*ROW_H
@@ -5159,7 +5270,7 @@ def main():
             elif tmr == 31:
                 se[3].play()
                 draw_text(screen, "You died.", 360, 240, font, RED)
-                draw_text(screen, "Game ovre.", 360, 380, font, RED)
+                draw_text(screen, "Game over.", 360, 380, font, RED)
                 record_stat("total_deaths")
                 flush_playtime()
                 if daily_mode:
