@@ -237,7 +237,11 @@ BASE_VISION_RADIUS = 5  # ミニマップの基本可視範囲(ここに難易�
 VOLUME_STEP = 0.1
 bgm_volume = 1.0
 se_volume = 1.0
-settings_cursor = 0  # 設定画面でのカーソル位置(0=BGM, 1=SE)
+# 音量スライダーを毎回0にせずとも即座に無音化したい場面(来客対応・夜間プレイ等)
+# のためのミュート。ON中もbgm_volume/se_volumeの値自体は保持し、解除時に元の
+# 音量へ戻せるようにする。Mキーでいつでもトグル可能。
+muted = False
+settings_cursor = 0  # 設定画面でのカーソル位置(0=BGM, 1=SE, 2=Mute All)
 
 DIFFICULTY_PARAMS = {
     "Easy": dict(
@@ -956,21 +960,22 @@ playtime_ms_accum = 0
 SETTINGS_FILE = "settings.json"
 
 def load_settings():
-    """settings.jsonからBGM/SE音量を読み込む。ファイルが無い/壊れている場合は
-    デフォルト(1.0=フル音量)のまま何もしない。"""
-    global bgm_volume, se_volume
+    """settings.jsonからBGM/SE音量とミュート状態を読み込む。ファイルが無い/
+    壊れている場合はデフォルト(1.0=フル音量、ミュートOFF)のまま何もしない。"""
+    global bgm_volume, se_volume, muted
     try:
         with open(SETTINGS_FILE, "r") as f:
             data = json.load(f)
         bgm_volume = max(0.0, min(1.0, float(data.get("bgm_volume", 1.0))))
         se_volume = max(0.0, min(1.0, float(data.get("se_volume", 1.0))))
+        muted = bool(data.get("muted", False))
     except Exception:
         pass
 
 def save_settings():
     try:
         with open(SETTINGS_FILE, "w") as f:
-            json.dump({"bgm_volume": bgm_volume, "se_volume": se_volume}, f)
+            json.dump({"bgm_volume": bgm_volume, "se_volume": se_volume, "muted": muted}, f)
     except Exception as e:
         _log_io_error("save_settings", e)
 
@@ -4194,7 +4199,7 @@ def main():
     global bounty_active
     global totem_buff_active, totem_str_bonus, totem_def_bonus
     global bestiary_detail_kind, bestiary_detail_index, bestiary_detail_img, bestiary_detail_seen
-    global bgm_volume, se_volume, settings_cursor
+    global bgm_volume, se_volume, settings_cursor, muted
     dmg = 0
     lif_p = 0
     str_p = 0
@@ -4217,14 +4222,17 @@ def main():
           pygame.mixer.Sound("sound/ohd_jin_levup.ogg"),
           pygame.mixer.Sound("sound/ohd_jin_win.ogg")]
 
-    load_settings()
-    pygame.mixer.music.set_volume(bgm_volume)
-    for s in se:
-        s.set_volume(se_volume)
+    def apply_bgm_volume():
+        pygame.mixer.music.set_volume(0.0 if muted else bgm_volume)
 
     def apply_se_volume():
+        vol = 0.0 if muted else se_volume
         for s in se:
-            s.set_volume(se_volume)
+            s.set_volume(vol)
+
+    load_settings()
+    apply_bgm_volume()
+    apply_se_volume()
 
     while True:
         for event in pygame.event.get():
@@ -4250,6 +4258,13 @@ def main():
                     elif event.key in (K_n, K_ESCAPE):
                         idx = 1
                         tmr = 0
+                # Mキーで全音声(BGM/SE)をどの画面からでも即座にミュート/解除できる
+                # ようにする(音量設定画面を開かなくても来客対応等ですぐ無音化したい)
+                if event.key == K_m:
+                    muted = not muted
+                    apply_bgm_volume()
+                    apply_se_volume()
+                    save_settings()
                 # ゲーム進行中(ダンジョン探索中)にQキーでセーブメニューを開く
                 if event.key == K_q and idx == 1:
                     idx = 30
@@ -4433,12 +4448,18 @@ def main():
                         idx = 44
                         tmr = 0
                     elif event.key in (K_UP, K_DOWN):
-                        settings_cursor = 1 - settings_cursor
+                        delta_row = 1 if event.key == K_DOWN else -1
+                        settings_cursor = (settings_cursor + delta_row) % 3
+                    elif event.key in (K_LEFT, K_RIGHT, K_RETURN, K_SPACE) and settings_cursor == 2:
+                        muted = not muted
+                        apply_bgm_volume()
+                        apply_se_volume()
+                        save_settings()
                     elif event.key in (K_LEFT, K_RIGHT):
                         delta = VOLUME_STEP if event.key == K_RIGHT else -VOLUME_STEP
                         if settings_cursor == 0:
                             bgm_volume = round(max(0.0, min(1.0, bgm_volume + delta)), 2)
-                            pygame.mixer.music.set_volume(bgm_volume)
+                            apply_bgm_volume()
                         else:
                             se_volume = round(max(0.0, min(1.0, se_volume + delta)), 2)
                             apply_se_volume()
@@ -4714,11 +4735,11 @@ def main():
                     tmr = 0
                 elif action == "bgm_vol_down":
                     bgm_volume = round(max(0.0, bgm_volume - VOLUME_STEP), 2)
-                    pygame.mixer.music.set_volume(bgm_volume)
+                    apply_bgm_volume()
                     save_settings()
                 elif action == "bgm_vol_up":
                     bgm_volume = round(min(1.0, bgm_volume + VOLUME_STEP), 2)
-                    pygame.mixer.music.set_volume(bgm_volume)
+                    apply_bgm_volume()
                     save_settings()
                 elif action == "se_vol_down":
                     se_volume = round(max(0.0, se_volume - VOLUME_STEP), 2)
@@ -4726,6 +4747,11 @@ def main():
                     save_settings()
                 elif action == "se_vol_up":
                     se_volume = round(min(1.0, se_volume + VOLUME_STEP), 2)
+                    apply_se_volume()
+                    save_settings()
+                elif action == "mute_toggle":
+                    muted = not muted
+                    apply_bgm_volume()
                     apply_se_volume()
                     save_settings()
 
@@ -5025,23 +5051,24 @@ def main():
         elif idx == 56:
             # 音量設定画面(ゲームデータメニューから開く)。BGM/SE音量を個別に
             # 0-100%で調整でき、変更は即座に反映されsettings.jsonへ保存される。
+            # Mute Allは音量値はそのまま残して一時的に無音化するトグル(Mキーと連動)。
             title_menu_rects.clear()
             screen.fill(BLACK)
             screen.blit(imgTitle, [-50, 80])
-            panel = pygame.Surface((880, 320))
+            panel = pygame.Surface((880, 390))
             panel.set_alpha(175)
             panel.fill(BLACK)
-            screen.blit(panel, [0, 300])
+            screen.blit(panel, [0, 280])
             MENU_X = 230
-            draw_text(screen, "Settings", MENU_X, 320, font, (255, 215, 0))
-            pygame.draw.rect(screen, (90, 90, 90), [MENU_X, 365, 480, 2])
+            draw_text(screen, "Settings", MENU_X, 310, font, (255, 215, 0))
+            pygame.draw.rect(screen, (90, 90, 90), [MENU_X, 355, 480, 2])
             BAR_X = MENU_X + 190
             BAR_W = 200
             rows = [
                 ("BGM Volume", bgm_volume, 0, "bgm_vol_down", "bgm_vol_up"),
                 ("SE Volume", se_volume, 1, "se_vol_down", "se_vol_up"),
             ]
-            y = 395
+            y = 385
             for label, vol, row_i, act_down, act_up in rows:
                 selected = settings_cursor == row_i
                 col = (255, 215, 0) if selected else WHITE
@@ -5054,7 +5081,18 @@ def main():
                 draw_button(screen, font, BAR_X + BAR_W + 70, y + 24, 34, 30, "+", act_up,
                             base_color=(90, 90, 90), mouse_pos=mouse_pos, align="center")
                 y += 70
-            draw_text(screen, "[Up/Down] Select  [Left/Right] Adjust  [Esc] Back", MENU_X, y + 5, fontXS, CYAN)
+            mute_selected = settings_cursor == 2
+            mcol = (255, 215, 0) if mute_selected else WHITE
+            mcursor = "> " if mute_selected else "  "
+            draw_text(screen, mcursor + "Mute All", MENU_X, y, fontS, mcol)
+            status_text = "ON" if muted else "OFF"
+            status_col = (255, 120, 120) if muted else (150, 255, 150)
+            draw_text(screen, status_text, BAR_X + 78, y + 2, fontS, status_col)
+            toggle_label = "Toggle"
+            draw_button(screen, fontS, BAR_X - 46, y - 2, fontS.size(toggle_label)[0] + 24, 30, toggle_label,
+                        "mute_toggle", base_color=(90, 90, 90), mouse_pos=mouse_pos, align="center")
+            y += 55
+            draw_text(screen, "[Up/Down] Select  [Left/Right] Adjust  [M] Mute  [Esc] Back", MENU_X, y + 5, fontXS, CYAN)
             y += 40
             label = "[Esc] Back"
             draw_button(screen, fontS, MENU_X, y, fontS.size(label)[0] + 30, 28, label, "back_to_game_data",
@@ -5090,6 +5128,9 @@ def main():
                     "[A] Attack   [P] Potion   [B] Blaze gem",
                     "[R] Run   [D] Defense   [F] Focus",
                     "[Up/Down] Select command   [Space/Enter] Confirm",
+                ]),
+                ("Anytime", (220, 220, 220), [
+                    "[M] Toggle mute (BGM+SE, works on any screen)",
                 ]),
             ]
             for title, col, lines in sections:
