@@ -1996,6 +1996,10 @@ is_blood_moon = False
 dmg_eff = 0
 btl_cmd = 0
 
+CRIT_FLASH_FRAMES = 6
+crit_flash_timer = 0
+crit_flash_color = (255, 255, 190)
+
 info_message = ""
 info_timer = 0
 
@@ -3529,6 +3533,19 @@ def draw_low_hp_warning(bg):
     pygame.draw.rect(vignette, (255, 0, 30, pulse), [0, 0, 880, 720], width=22)
     bg.blit(vignette, [0, 0])
 
+def draw_crit_flash(bg):
+    """クリティカルヒット/コンボフィニッシャー発動時に、画面全体を短く光らせて
+    爽快感を演出する。crit_flash_timerが立っている間だけ描画し、フレームが
+    進むごとに透明度を下げてすぐ消えるようにする。"""
+    global crit_flash_timer
+    if crit_flash_timer <= 0:
+        return
+    alpha = int(190 * crit_flash_timer / CRIT_FLASH_FRAMES)
+    flash = pygame.Surface((880, 720), pygame.SRCALPHA)
+    flash.fill((*crit_flash_color, alpha))
+    bg.blit(flash, [0, 0])
+    crit_flash_timer -= 1
+
 _pet_icon_scaled_cache = {}
 
 def draw_pet_status(bg, x, y, fnt):
@@ -3951,8 +3968,9 @@ def draw_battle(bg, fnt):
         draw_text(bg, msg_txt, 600, 100+i*50, fnt, msg_col)
     draw_low_hp_warning(bg)
     draw_para(bg, fnt)
-    
-    
+    draw_crit_flash(bg)
+
+
 def battle_command(bg, fnt, key):
     global btl_cmd
     ent = False
@@ -4213,6 +4231,7 @@ def main():
     global stage_intro_timer, stage_intro_num
     global in_hidden_stage
     global combo_count
+    global crit_flash_timer, crit_flash_color
     global pet_type, pet_def_bonus, pet_item_bonus
     global daily_mode
     global daily_start_requested
@@ -5727,9 +5746,13 @@ def main():
                     record_stat("combo_finishers_used")
                     unlock_achievement("combo_finisher")
                     combo_count = 0
+                    crit_flash_color = (255, 90, 220)
+                    crit_flash_timer = CRIT_FLASH_FRAMES + 4
                 if skill_crit_chance > 0 and random.random() < skill_crit_chance:
                     dmg = int(dmg * 2)
                     set_message("CRITICAL HIT!", (255, 60, 60))
+                    crit_flash_color = (255, 255, 190)
+                    crit_flash_timer = CRIT_FLASH_FRAMES
             if 2 <= tmr <= 4:
                 screen.blit(imgEffect[0], [700-tmr*120, -100+tmr*120])
             if tmr == 5:
