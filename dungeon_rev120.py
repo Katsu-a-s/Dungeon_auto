@@ -5441,6 +5441,12 @@ def main():
                 if floor_modifier:
                     fm = FLOOR_MODIFIERS[floor_modifier]
                     draw_text(screen, f"{fm['name']}: {fm['desc']}", 220, 225, fontS, fm["color"])
+                if is_boss_floor(floor) and floor not in boss_floors_cleared:
+                    # ボス階に足を踏み入れたことを警告し、緊張感と身構える猶予を与える
+                    # (静かに階段まで歩いて不意打ちされるより、事前に分かった方が
+                    # ポーションの準備などができて楽しい)
+                    pulse = 140 + int(90 * abs((tmr % 20) - 10) / 10)
+                    draw_text(screen, "! A powerful presence lurks on this floor !", 130, 250, fontS, (255, pulse//3, 30))
             if stage_intro_timer > 0:
                 stage_intro_timer = stage_intro_timer - 1
                 draw_text(screen, f"STAGE {stage_intro_num}", 330, 260, font, BLINK[tmr%6])
