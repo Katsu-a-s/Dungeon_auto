@@ -563,6 +563,7 @@ FLOOR_MODIFIERS = {
     "serene":    {"name": "Serene Floor",     "desc": "Poison cannot affect you here", "color": (170, 255, 220)},
     "fortunate": {"name": "Fortunate Floor",  "desc": "Critical hits land more often here", "color": (255, 200, 80)},
     "resonant":  {"name": "Resonant Floor",   "desc": "Combo damage bonus grows faster here", "color": (255, 120, 220)},
+    "frostbound": {"name": "Frostbound Floor", "desc": "Enemy attacks hit softer here", "color": (140, 210, 255)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -612,6 +613,9 @@ def modifier_crit_chance_bonus():
 
 def modifier_combo_bonus_per_stack():
     return 0.15 if floor_modifier == "resonant" else 0.1
+
+def modifier_incoming_dmg_mult():
+    return 0.85 if floor_modifier == "frostbound" else 1.0
 
 # --- 床の彩色パッチ(見た目だけの演出) ---
 # フロアの一部区画をランダムな色合いに染めて、同じ床タイルの繰り返しでも
@@ -5955,7 +5959,7 @@ def main():
                 emy_step = 30
             if tmr == 9:
                 dmg_reduction = pl_def_base + pl_def_buff + pet_def_bonus + modifier_def_bonus()
-                dmg =max(1, (emy_str + random.randint(0, emy_str))- dmg_reduction)
+                dmg = max(1, int(((emy_str + random.randint(0, emy_str)) - dmg_reduction) * modifier_incoming_dmg_mult()))
                 set_message(str(dmg)+"pts of damage!", (255, 100, 100))
                 spawn_damage_popup(190, 585, str(dmg), (255, 90, 90), big=boss_phase2)
                 dmg_eff = 5
