@@ -224,6 +224,11 @@ pl_exp_mult = 1.0
 pl_charge = False
 pl_poison = 0
 
+# --- 低HP警告 ---
+# 残りHPが最大値の一定割合を切ったとき、数値を読まなくても直感的に
+# 危険な状態だとわかるよう、画面端を脈打つ赤で縁取る演出を入れる。
+LOW_HP_WARNING_RATIO = 0.2
+
 # --- 難易度システム ---
 DIFFICULTY_LIST = ["Easy", "Normal", "Hard"]
 difficulty = "Normal"
@@ -2789,6 +2794,7 @@ def draw_dungeon(bg, fnt):
         vignette = pygame.Surface((880, 720), pygame.SRCALPHA)
         pygame.draw.rect(vignette, (200, 20, 10, pulse), [0, 0, 880, 720], width=26)
         bg.blit(vignette, [0, 0])
+    draw_low_hp_warning(bg)
     if dp["minimap_enabled"]:
         draw_minimap(bg)
     draw_para(bg, fnt)
@@ -3510,6 +3516,19 @@ def draw_text(bg, txt, x, y, fnt, col):
     sur = fnt.render(txt, True, col)
     bg.blit(sur, [x, y])
 
+def draw_low_hp_warning(bg):
+    """HPが最大値の20%を切ると、心拍のように速く脈打つ赤い縁取りを
+    画面端に表示する(探索/バトル共通)。崩落演出よりも脈拍を速くして、
+    見分けがつくようにしている。"""
+    if pl_lifemax <= 0 or pl_life <= 0:
+        return
+    if pl_life / pl_lifemax > LOW_HP_WARNING_RATIO:
+        return
+    pulse = 70 + int(60 * abs((tmr % 16) - 8) / 8)
+    vignette = pygame.Surface((880, 720), pygame.SRCALPHA)
+    pygame.draw.rect(vignette, (255, 0, 30, pulse), [0, 0, 880, 720], width=22)
+    bg.blit(vignette, [0, 0])
+
 _pet_icon_scaled_cache = {}
 
 def draw_pet_status(bg, x, y, fnt):
@@ -3930,6 +3949,7 @@ def draw_battle(bg, fnt):
     for i in range(10):
         msg_txt, msg_col = message[i]
         draw_text(bg, msg_txt, 600, 100+i*50, fnt, msg_col)
+    draw_low_hp_warning(bg)
     draw_para(bg, fnt)
     
     
