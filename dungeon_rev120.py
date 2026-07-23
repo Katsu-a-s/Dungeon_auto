@@ -112,6 +112,9 @@ imgPressurePlateFlame = pygame.image.load("image/floor_pressure_plate_flame.png"
 imgSealedDoor = pygame.image.load("image/floor_sealed_door.png")
 imgSealedDoorCrystal = pygame.image.load("image/floor_sealed_door_crystal.png")
 imgSealedDoorFlame = pygame.image.load("image/floor_sealed_door_flame.png")
+imgSealedDoorOpen = pygame.image.load("image/floor_sealed_door_open.png")
+imgSealedDoorOpenCrystal = pygame.image.load("image/floor_sealed_door_open_crystal.png")
+imgSealedDoorOpenFlame = pygame.image.load("image/floor_sealed_door_open_flame.png")
 imgSpirit = pygame.image.load("image/floor_spirit.png")
 imgSpiritCrystal = pygame.image.load("image/floor_spirit_crystal.png")
 imgSpiritFlame = pygame.image.load("image/floor_spirit_flame.png")
@@ -2695,6 +2698,14 @@ def draw_dungeon(bg, fnt):
                         bg.blit(imgChimeraLairFlame, [X, Y])
                     else:
                         bg.blit(imgChimeraLair, [X, Y])
+                elif tv == 36:
+                    # 開いた封印の扉(圧力プレート解放後の見た目。ステージテーマに応じて背景を差し替え)
+                    if floor_variant == 1:
+                        bg.blit(imgSealedDoorOpenCrystal, [X, Y])
+                    elif floor_variant == 2:
+                        bg.blit(imgSealedDoorOpenFlame, [X, Y])
+                    else:
+                        bg.blit(imgSealedDoorOpen, [X, Y])
                 if tv == 9 or tv == 10:
                     # 隠し壁(10)は発見されるまで普通の壁と同じ見た目
                     if wall_variant == 1:
@@ -3341,13 +3352,13 @@ def move_player(key):
         return
 
     if dungeon[pl_y][pl_x] == 24:
-        # 圧力プレート: このフロアにある封印された扉をすべて開く
+        # 圧力プレート: このフロアにある封印された扉をすべて開く(開いた扉は専用グラフィックに差し替え)
         dungeon[pl_y][pl_x] = 0
         opened = 0
         for yy in range(DUNGEON_H):
             for xx in range(DUNGEON_W):
                 if dungeon[yy][xx] == 25:
-                    dungeon[yy][xx] = 0
+                    dungeon[yy][xx] = 36
                     opened += 1
         if opened > 0:
             record_stat("pressure_plates_triggered")
