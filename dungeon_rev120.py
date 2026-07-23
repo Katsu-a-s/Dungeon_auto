@@ -227,6 +227,15 @@ difficulty = "Normal"
 food_acc = 0.0  # 食料消費のペース補正で生じる端数をためておくアキュムレータ
 BASE_VISION_RADIUS = 5  # ミニマップの基本可視範囲(ここに難易度補正が乗る)
 
+# --- 音量設定 ---
+# これまでBGM/SEの音量調整手段が無く、ユーザーが自分の環境で音量を
+# 調整できなかったため設定画面を追加する。デフォルトは1.0(=これまで通り
+# set_volume未呼び出しの状態と同じ音量)にして、既存プレイヤーの体感を変えない。
+VOLUME_STEP = 0.1
+bgm_volume = 1.0
+se_volume = 1.0
+settings_cursor = 0  # 設定画面でのカーソル位置(0=BGM, 1=SE)
+
 DIFFICULTY_PARAMS = {
     "Easy": dict(
         enemy_str_mult=0.75, enemy_life_mult=0.75,
@@ -940,6 +949,27 @@ STATS_DEFS = [
 ]
 
 playtime_ms_accum = 0
+
+SETTINGS_FILE = "settings.json"
+
+def load_settings():
+    """settings.jsonからBGM/SE音量を読み込む。ファイルが無い/壊れている場合は
+    デフォルト(1.0=フル音量)のまま何もしない。"""
+    global bgm_volume, se_volume
+    try:
+        with open(SETTINGS_FILE, "r") as f:
+            data = json.load(f)
+        bgm_volume = max(0.0, min(1.0, float(data.get("bgm_volume", 1.0))))
+        se_volume = max(0.0, min(1.0, float(data.get("se_volume", 1.0))))
+    except Exception:
+        pass
+
+def save_settings():
+    try:
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump({"bgm_volume": bgm_volume, "se_volume": se_volume}, f)
+    except Exception as e:
+        _log_io_error("save_settings", e)
 
 def flush_playtime():
     """蓄積したプレイ時間(ms)をstats.jsonへ書き出し、蓄積分をリセットする"""
@@ -4153,6 +4183,7 @@ def main():
     global bounty_active
     global totem_buff_active, totem_str_bonus, totem_def_bonus
     global bestiary_detail_kind, bestiary_detail_index, bestiary_detail_img, bestiary_detail_seen
+    global bgm_volume, se_volume, settings_cursor
     dmg = 0
     lif_p = 0
     str_p = 0
@@ -4174,7 +4205,16 @@ def main():
           pygame.mixer.Sound("sound/ohd_jin_gameover.ogg"),
           pygame.mixer.Sound("sound/ohd_jin_levup.ogg"),
           pygame.mixer.Sound("sound/ohd_jin_win.ogg")]
-    
+
+    load_settings()
+    pygame.mixer.music.set_volume(bgm_volume)
+    for s in se:
+        s.set_volume(se_volume)
+
+    def apply_se_volume():
+        for s in se:
+            s.set_volume(se_volume)
+
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -4365,6 +4405,26 @@ def main():
                 # タイトル画面でYキーによりデイリーチャレンジ(今日の固定シード)を開始する
                 if event.key == K_y and idx == 0:
                     daily_start_requested = True
+                # ゲームデータメニュー内でOキーにより音量設定画面を開く
+                if event.key == K_o and idx == 44:
+                    idx = 56
+                    tmr = 0
+                    settings_cursor = 0
+                if idx == 56:
+                    if event.key == K_ESCAPE:
+                        idx = 44
+                        tmr = 0
+                    elif event.key in (K_UP, K_DOWN):
+                        settings_cursor = 1 - settings_cursor
+                    elif event.key in (K_LEFT, K_RIGHT):
+                        delta = VOLUME_STEP if event.key == K_RIGHT else -VOLUME_STEP
+                        if settings_cursor == 0:
+                            bgm_volume = round(max(0.0, min(1.0, bgm_volume + delta)), 2)
+                            pygame.mixer.music.set_volume(bgm_volume)
+                        else:
+                            se_volume = round(max(0.0, min(1.0, se_volume + delta)), 2)
+                            apply_se_volume()
+                        save_settings()
                 # 拠点(サンクチュア)でのアイテム交換
                 if idx == 28:
                     if event.key == K_p and potion >= 2:
@@ -4627,6 +4687,26 @@ def main():
                 elif action == "open_hero_select":
                     idx = 49
                     tmr = 0
+                elif action == "open_settings":
+                    idx = 56
+                    tmr = 0
+                    settings_cursor = 0
+                elif action == "bgm_vol_down":
+                    bgm_volume = round(max(0.0, bgm_volume - VOLUME_STEP), 2)
+                    pygame.mixer.music.set_volume(bgm_volume)
+                    save_settings()
+                elif action == "bgm_vol_up":
+                    bgm_volume = round(min(1.0, bgm_volume + VOLUME_STEP), 2)
+                    pygame.mixer.music.set_volume(bgm_volume)
+                    save_settings()
+                elif action == "se_vol_down":
+                    se_volume = round(max(0.0, se_volume - VOLUME_STEP), 2)
+                    apply_se_volume()
+                    save_settings()
+                elif action == "se_vol_up":
+                    se_volume = round(min(1.0, se_volume + VOLUME_STEP), 2)
+                    apply_se_volume()
+                    save_settings()
 
         tmr = tmr +1
         if info_timer > 0:
@@ -4906,9 +4986,51 @@ def main():
             else:
                 draw_button(screen, font, MENU_X, y, BTN_W, 34, "No autosave yet",
                             mouse_pos=mouse_pos, enabled=False)
+            y += 45
+            label = "[O] Settings (BGM/SE volume)"
+            draw_button(screen, font, MENU_X, y, BTN_W, 34, label, "open_settings",
+                        base_color=(90, 90, 100), mouse_pos=mouse_pos)
             y += 60
             label = "[Esc] Back"
             draw_button(screen, fontS, MENU_X, y, fontS.size(label)[0] + 30, 28, label, "back_to_title",
+                        base_color=(110, 110, 120), mouse_pos=mouse_pos)
+
+        elif idx == 56:
+            # 音量設定画面(ゲームデータメニューから開く)。BGM/SE音量を個別に
+            # 0-100%で調整でき、変更は即座に反映されsettings.jsonへ保存される。
+            title_menu_rects.clear()
+            screen.fill(BLACK)
+            screen.blit(imgTitle, [-50, 80])
+            panel = pygame.Surface((880, 320))
+            panel.set_alpha(175)
+            panel.fill(BLACK)
+            screen.blit(panel, [0, 300])
+            MENU_X = 230
+            draw_text(screen, "Settings", MENU_X, 320, font, (255, 215, 0))
+            pygame.draw.rect(screen, (90, 90, 90), [MENU_X, 365, 480, 2])
+            BAR_X = MENU_X + 190
+            BAR_W = 200
+            rows = [
+                ("BGM Volume", bgm_volume, 0, "bgm_vol_down", "bgm_vol_up"),
+                ("SE Volume", se_volume, 1, "se_vol_down", "se_vol_up"),
+            ]
+            y = 395
+            for label, vol, row_i, act_down, act_up in rows:
+                selected = settings_cursor == row_i
+                col = (255, 215, 0) if selected else WHITE
+                cursor = "> " if selected else "  "
+                draw_text(screen, cursor + label, MENU_X, y, fontS, col)
+                draw_bar(screen, BAR_X, y + 32, BAR_W, 16, vol * 100, 100)
+                draw_text(screen, f"{int(round(vol * 100))}%", BAR_X + BAR_W + 15, y + 27, fontS, WHITE)
+                draw_button(screen, font, BAR_X - 46, y + 24, 34, 30, "-", act_down,
+                            base_color=(90, 90, 90), mouse_pos=mouse_pos, align="center")
+                draw_button(screen, font, BAR_X + BAR_W + 70, y + 24, 34, 30, "+", act_up,
+                            base_color=(90, 90, 90), mouse_pos=mouse_pos, align="center")
+                y += 70
+            draw_text(screen, "[Up/Down] Select  [Left/Right] Adjust  [Esc] Back", MENU_X, y + 5, fontXS, CYAN)
+            y += 40
+            label = "[Esc] Back"
+            draw_button(screen, fontS, MENU_X, y, fontS.size(label)[0] + 30, 28, label, "back_to_game_data",
                         base_color=(110, 110, 120), mouse_pos=mouse_pos)
 
         elif idx == 45:
