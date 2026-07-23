@@ -306,7 +306,7 @@ combo_count = 0
 COMBO_MAX_BONUS_STACKS = 5  # これ以上は頭打ち(+50%)
 
 def combo_damage_mult():
-    return 1.0 + 0.1 * min(max(0, combo_count - 1), COMBO_MAX_BONUS_STACKS)
+    return 1.0 + modifier_combo_bonus_per_stack() * min(max(0, combo_count - 1), COMBO_MAX_BONUS_STACKS)
 
 # --- コンボ・フィニッシャー(コンボを高く積み上げた末の大技) ---
 # 通常のコンボ補正が頭打ちになった後もコンボを繋ぎ続け、しきい値に達した状態で
@@ -562,6 +562,7 @@ FLOOR_MODIFIERS = {
     "sparkling": {"name": "Sparkling Floor",  "desc": "EXP gained here is boosted",   "color": (255, 180, 240)},
     "serene":    {"name": "Serene Floor",     "desc": "Poison cannot affect you here", "color": (170, 255, 220)},
     "fortunate": {"name": "Fortunate Floor",  "desc": "Critical hits land more often here", "color": (255, 200, 80)},
+    "resonant":  {"name": "Resonant Floor",   "desc": "Combo damage bonus grows faster here", "color": (255, 120, 220)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -608,6 +609,9 @@ def modifier_poison_immune():
 
 def modifier_crit_chance_bonus():
     return 0.15 if floor_modifier == "fortunate" else 0.0
+
+def modifier_combo_bonus_per_stack():
+    return 0.15 if floor_modifier == "resonant" else 0.1
 
 # --- 床の彩色パッチ(見た目だけの演出) ---
 # フロアの一部区画をランダムな色合いに染めて、同じ床タイルの繰り返しでも
