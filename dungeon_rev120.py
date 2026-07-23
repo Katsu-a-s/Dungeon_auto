@@ -554,6 +554,7 @@ FLOOR_MODIFIERS = {
     "blessed":   {"name": "Blessed Floor",    "desc": "Healing is stronger here",    "color": (255, 235, 170)},
     "rocky":     {"name": "Rocky Floor",      "desc": "+3 DEF here, but you move slower", "color": (120, 100, 80)},
     "toxic":     {"name": "Toxic Floor",      "desc": "Enemies poison you more often",  "color": (120, 170, 60)},
+    "sparkling": {"name": "Sparkling Floor",  "desc": "EXP gained here is boosted",   "color": (255, 180, 240)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -591,6 +592,9 @@ def modifier_rocky_speed_mult():
 
 def modifier_poison_chance_bonus():
     return 25 if floor_modifier == "toxic" else 0
+
+def modifier_exp_mult():
+    return 1.3 if floor_modifier == "sparkling" else 1.0
 
 # --- 床の彩色パッチ(見た目だけの演出) ---
 # フロアの一部区画をランダムな色合いに染めて、同じ床タイルの繰り返しでも
@@ -5809,7 +5813,7 @@ def main():
                 register_bounty_kill()
                 if not battle_took_damage:
                     unlock_achievement("no_damage_win")
-                exp_gain = int(max(1, (typ + 1) * emy_lv * 3) * pl_exp_mult * diff_params()["exp_mult"] * skill_exp_mult * char_params()["exp_mult"])
+                exp_gain = int(max(1, (typ + 1) * emy_lv * 3) * pl_exp_mult * diff_params()["exp_mult"] * skill_exp_mult * char_params()["exp_mult"] * modifier_exp_mult())
                 if is_elite:
                     exp_gain = int(exp_gain * ELITE_EXP_MULT)
                     unlock_achievement("elite_hunter")
