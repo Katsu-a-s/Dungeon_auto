@@ -561,6 +561,7 @@ FLOOR_MODIFIERS = {
     "toxic":     {"name": "Toxic Floor",      "desc": "Enemies poison you more often",  "color": (120, 170, 60)},
     "sparkling": {"name": "Sparkling Floor",  "desc": "EXP gained here is boosted",   "color": (255, 180, 240)},
     "serene":    {"name": "Serene Floor",     "desc": "Poison cannot affect you here", "color": (170, 255, 220)},
+    "fortunate": {"name": "Fortunate Floor",  "desc": "Critical hits land more often here", "color": (255, 200, 80)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -604,6 +605,9 @@ def modifier_exp_mult():
 
 def modifier_poison_immune():
     return floor_modifier == "serene"
+
+def modifier_crit_chance_bonus():
+    return 0.15 if floor_modifier == "fortunate" else 0.0
 
 # --- 床の彩色パッチ(見た目だけの演出) ---
 # フロアの一部区画をランダムな色合いに染めて、同じ床タイルの繰り返しでも
@@ -5748,7 +5752,8 @@ def main():
                     combo_count = 0
                     crit_flash_color = (255, 90, 220)
                     crit_flash_timer = CRIT_FLASH_FRAMES + 4
-                if skill_crit_chance > 0 and random.random() < skill_crit_chance:
+                total_crit_chance = skill_crit_chance + modifier_crit_chance_bonus()
+                if total_crit_chance > 0 and random.random() < total_crit_chance:
                     dmg = int(dmg * 2)
                     set_message("CRITICAL HIT!", (255, 60, 60))
                     crit_flash_color = (255, 255, 190)
