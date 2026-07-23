@@ -914,16 +914,17 @@ ACHIEVEMENT_LABELS = dict(ACHIEVEMENT_DEFS)
 def unlock_achievement(key):
     """実績を解除する。以前は解除してもプレイヤーには何の合図もなく、
     後でRecords→Achievements画面を開くまで気づけなかったため、
-    新規解除時はinfo_messageでトーストのように知らせる。"""
-    global _current_title_dirty, info_message, info_timer
+    新規解除時はinfo_messageでトーストのように知らせていたが、他の雑多な
+    メッセージと見分けがつかず地味だった。今は専用のゴールドバナー演出
+    (draw_achievement_toast)で目立たせる。"""
+    global _current_title_dirty, achievement_toast_label, achievement_toast_timer
     data = load_achievements()
     if not data.get(key, False):
         data[key] = True
         save_achievements(data)
         _current_title_dirty = True
-        label = ACHIEVEMENT_LABELS.get(key, key)
-        info_message = f"Achievement unlocked: {label}!"
-        info_timer = 90
+        achievement_toast_label = ACHIEVEMENT_LABELS.get(key, key)
+        achievement_toast_timer = ACHIEVEMENT_TOAST_FRAMES
 
 def add_trap_count(n=1):
     data = load_achievements()
@@ -2016,6 +2017,17 @@ CRIT_FLASH_FRAMES = 6
 crit_flash_timer = 0
 crit_flash_color = (255, 255, 190)
 last_atk_special = None  # None / "crit" / "finisher" — 直前の攻撃の演出種別(ダメージポップアップの見た目に使う)
+
+# --- 実績解除トースト演出 ---
+# 以前はunlock_achievement()がinfo_message(探索/バトル中の汎用メッセージ欄)を
+# 使い回していたため、他のメッセージと表示位置・見た目が同じで地味だった。
+# 実績はプレイヤーへの数少ない「ご褒美」演出なので、専用のゴールドバナーを
+# 画面上部にスライドインさせ、バッジ画像付きで目立たせるようにする。
+ACHIEVEMENT_TOAST_FRAMES = 150   # 表示している総フレーム数
+ACHIEVEMENT_TOAST_SLIDE = 12     # 上からスライドインする所要フレーム数
+ACHIEVEMENT_TOAST_FADE = 25      # 終了間際にフェードアウトする所要フレーム数
+achievement_toast_label = ""
+achievement_toast_timer = 0
 
 # --- 画面シェイク演出 ---
 # 被弾・会心の一撃・コンボフィニッシャーなど「衝撃」のある瞬間に、画面全体を
@@ -3604,6 +3616,54 @@ def draw_crit_flash(bg):
     flash.fill((*crit_flash_color, alpha))
     bg.blit(flash, [0, 0])
     crit_flash_timer -= 1
+
+ACHIEVEMENT_TOAST_W = 420
+ACHIEVEMENT_TOAST_H = 66
+_achievement_toast_hdr_font = None
+_achievement_toast_lbl_font = None
+
+def draw_achievement_toast(bg):
+    """実績解除時、画面上部にゴールドのバナーをスライドインさせ、バッジ画像と
+    共に『Achievement Unlocked!』を表示する。探索中/バトル中/メニュー中を
+    問わずメインループの描画の最後(画面更新の直前)から呼ばれるので、
+    どの画面状態でも同じように目立つ。"""
+    global achievement_toast_timer, _achievement_toast_hdr_font, _achievement_toast_lbl_font
+    if achievement_toast_timer <= 0:
+        return
+    elapsed = ACHIEVEMENT_TOAST_FRAMES - achievement_toast_timer
+    if elapsed < ACHIEVEMENT_TOAST_SLIDE:
+        t = elapsed / ACHIEVEMENT_TOAST_SLIDE
+        y = int(-ACHIEVEMENT_TOAST_H * (1 - t))
+        alpha = int(255 * t)
+    elif achievement_toast_timer <= ACHIEVEMENT_TOAST_FADE:
+        t = achievement_toast_timer / ACHIEVEMENT_TOAST_FADE
+        y = 0
+        alpha = int(255 * t)
+    else:
+        y = 0
+        alpha = 255
+    x = (880 - ACHIEVEMENT_TOAST_W) // 2
+    top = 14 + y
+    glow = 140 + int(90 * abs((tmr % 24) - 12) / 12)
+    panel = pygame.Surface((ACHIEVEMENT_TOAST_W, ACHIEVEMENT_TOAST_H), pygame.SRCALPHA)
+    panel.fill((25, 20, 5, min(230, alpha)))
+    pygame.draw.rect(panel, (255, 210, 60, min(255, alpha)), [0, 0, ACHIEVEMENT_TOAST_W, ACHIEVEMENT_TOAST_H], width=3)
+    pygame.draw.rect(panel, (255, 230, 140, min(glow, alpha)), [0, 0, ACHIEVEMENT_TOAST_W, ACHIEVEMENT_TOAST_H], width=1)
+    bg.blit(panel, [x, top])
+    badge = get_achievement_badge_image(46)
+    badge_sur = badge.copy()
+    badge_sur.set_alpha(alpha)
+    bg.blit(badge_sur, [x + 10, top + 10])
+    if _achievement_toast_hdr_font is None:
+        _achievement_toast_hdr_font = pygame.font.Font(None, 22)
+        _achievement_toast_lbl_font = pygame.font.Font(None, 24)
+    hdr = _achievement_toast_hdr_font.render("ACHIEVEMENT UNLOCKED!", True, (255, 215, 90))
+    hdr.set_alpha(alpha)
+    bg.blit(hdr, [x + 66, top + 10])
+    lbl = _achievement_toast_lbl_font.render(achievement_toast_label, True, WHITE)
+    lbl.set_alpha(alpha)
+    bg.blit(lbl, [x + 66, top + 34])
+    achievement_toast_timer -= 1
 
 _pet_icon_scaled_cache = {}
 
@@ -6627,6 +6687,7 @@ def main():
             if dx or dy:
                 screen.scroll(dx, dy)
             screen_shake_timer -= 1
+        draw_achievement_toast(screen)
         pygame.display.update()
         if idx in (1, 3, 4):
             # 移動をなめらかにするため、探索中だけ高フレームレートで描画する
