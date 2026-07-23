@@ -2008,6 +2008,14 @@ CRIT_FLASH_FRAMES = 6
 crit_flash_timer = 0
 crit_flash_color = (255, 255, 190)
 
+# --- 画面シェイク演出 ---
+# 被弾・会心の一撃・コンボフィニッシャーなど「衝撃」のある瞬間に、画面全体を
+# 数フレームだけ小さくずらして描画することで打撃の重みを演出する。
+# 実装はscreen.scroll()で現フレームの描画内容を数px揺らすだけの軽量な仕掛けで、
+# 次フレームには通常通り再描画されるため見た目以外への影響はない。
+screen_shake_timer = 0
+screen_shake_mag = 0
+
 info_message = ""
 info_timer = 0
 
@@ -4250,6 +4258,7 @@ def main():
     global in_hidden_stage
     global combo_count
     global crit_flash_timer, crit_flash_color
+    global screen_shake_timer, screen_shake_mag
     global pet_type, pet_def_bonus, pet_item_bonus
     global daily_mode
     global daily_start_requested
@@ -5772,12 +5781,16 @@ def main():
                     combo_count = 0
                     crit_flash_color = (255, 90, 220)
                     crit_flash_timer = CRIT_FLASH_FRAMES + 4
+                    screen_shake_timer = 10
+                    screen_shake_mag = 6
                 total_crit_chance = skill_crit_chance + modifier_crit_chance_bonus()
                 if total_crit_chance > 0 and random.random() < total_crit_chance:
                     dmg = int(dmg * 2)
                     set_message("CRITICAL HIT!", (255, 60, 60))
                     crit_flash_color = (255, 255, 190)
                     crit_flash_timer = CRIT_FLASH_FRAMES
+                    screen_shake_timer = 6
+                    screen_shake_mag = 4
             if 2 <= tmr <= 4:
                 screen.blit(imgEffect[0], [700-tmr*120, -100+tmr*120])
             if tmr == 5:
@@ -5822,6 +5835,8 @@ def main():
                 set_message(str(dmg)+"pts of damage!", (255, 100, 100))
                 dmg_eff = 5
                 emy_step = 0
+                screen_shake_timer = 8 if boss_phase2 else 5
+                screen_shake_mag = 5 if boss_phase2 else 3
                 if typ in (5, 7, 14) and pl_poison == 0 and not modifier_poison_immune() and random.randint(0, 99) < 30 + modifier_poison_chance_bonus():
                     pl_poison = 50
                     set_message("Poisoned!", (190, 80, 220))
@@ -6546,6 +6561,12 @@ def main():
                 hold_timer = 0
             except NameError:
                 pass
+        if screen_shake_timer > 0:
+            dx = random.randint(-screen_shake_mag, screen_shake_mag)
+            dy = random.randint(-screen_shake_mag, screen_shake_mag)
+            if dx or dy:
+                screen.scroll(dx, dy)
+            screen_shake_timer -= 1
         pygame.display.update()
         if idx in (1, 3, 4):
             # 移動をなめらかにするため、探索中だけ高フレームレートで描画する
