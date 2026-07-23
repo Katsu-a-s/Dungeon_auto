@@ -916,8 +916,10 @@ def unlock_achievement(key):
     後でRecords→Achievements画面を開くまで気づけなかったため、
     新規解除時はinfo_messageでトーストのように知らせていたが、他の雑多な
     メッセージと見分けがつかず地味だった。今は専用のゴールドバナー演出
-    (draw_achievement_toast)で目立たせる。"""
-    global _current_title_dirty, achievement_toast_label, achievement_toast_timer
+    (draw_achievement_toast)で目立たせる。さらにバナー表示と同時に
+    ジングルを鳴らし(achievement_sound_pending)、視覚だけでなく聴覚でも
+    達成の瞬間に気づけるようにする。"""
+    global _current_title_dirty, achievement_toast_label, achievement_toast_timer, achievement_sound_pending
     data = load_achievements()
     if not data.get(key, False):
         data[key] = True
@@ -925,6 +927,7 @@ def unlock_achievement(key):
         _current_title_dirty = True
         achievement_toast_label = ACHIEVEMENT_LABELS.get(key, key)
         achievement_toast_timer = ACHIEVEMENT_TOAST_FRAMES
+        achievement_sound_pending = True
 
 def add_trap_count(n=1):
     data = load_achievements()
@@ -2028,6 +2031,7 @@ ACHIEVEMENT_TOAST_SLIDE = 12     # 上からスライドインする所要フレ
 ACHIEVEMENT_TOAST_FADE = 25      # 終了間際にフェードアウトする所要フレーム数
 achievement_toast_label = ""
 achievement_toast_timer = 0
+achievement_sound_pending = False  # トーストと同時に鳴らすジングルの再生待ちフラグ
 
 # --- 画面シェイク演出 ---
 # 被弾・会心の一撃・コンボフィニッシャーなど「衝撃」のある瞬間に、画面全体を
@@ -4379,6 +4383,7 @@ def main():
     global totem_buff_active, totem_str_bonus, totem_def_bonus
     global bestiary_detail_kind, bestiary_detail_index, bestiary_detail_img, bestiary_detail_seen
     global bgm_volume, se_volume, settings_cursor, muted
+    global achievement_sound_pending
     dmg = 0
     lif_p = 0
     str_p = 0
@@ -6687,6 +6692,9 @@ def main():
             if dx or dy:
                 screen.scroll(dx, dy)
             screen_shake_timer -= 1
+        if achievement_sound_pending:
+            se[4].play()
+            achievement_sound_pending = False
         draw_achievement_toast(screen)
         pygame.display.update()
         if idx in (1, 3, 4):
