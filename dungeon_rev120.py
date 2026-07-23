@@ -2007,6 +2007,7 @@ btl_cmd = 0
 CRIT_FLASH_FRAMES = 6
 crit_flash_timer = 0
 crit_flash_color = (255, 255, 190)
+last_atk_special = None  # None / "crit" / "finisher" — 直前の攻撃の演出種別(ダメージポップアップの見た目に使う)
 
 # --- 画面シェイク演出 ---
 # 被弾・会心の一撃・コンボフィニッシャーなど「衝撃」のある瞬間に、画面全体を
@@ -2015,6 +2016,40 @@ crit_flash_color = (255, 255, 190)
 # 次フレームには通常通り再描画されるため見た目以外への影響はない。
 screen_shake_timer = 0
 screen_shake_mag = 0
+
+# --- ダメージポップアップ演出 ---
+# 攻撃がヒットした瞬間、命中した対象の頭上にダメージ数値が浮かび上がって
+# フェードアウトする。「xxxpts of damage!」のメッセージ欄は画面右側に固定表示
+# されるだけなので、実際に何がどこで殴られたのかを視覚的に補強する狙い。
+DMG_POPUP_LIFE = 30
+damage_popups = []  # [[x, y, text, color, life, big], ...]
+_dmg_popup_font_big = None
+
+def spawn_damage_popup(x, y, text, color, big=False):
+    damage_popups.append([x, y, text, color, DMG_POPUP_LIFE, big])
+
+def draw_damage_popups(bg, fnt):
+    """ダメージポップアップを上へ浮かせつつフェードアウトしながら描画する。
+    クリティカル/コンボフィニッシャーで生じたものは一回り大きいフォントで
+    強調する。"""
+    global _dmg_popup_font_big
+    if not damage_popups:
+        return
+    if _dmg_popup_font_big is None:
+        _dmg_popup_font_big = pygame.font.Font(None, 44)
+    for p in damage_popups:
+        x, y, text, color, life, big = p
+        f = _dmg_popup_font_big if big else fnt
+        rise = (DMG_POPUP_LIFE - life) * 1.3
+        alpha = max(0, min(255, int(255 * life / DMG_POPUP_LIFE)))
+        shadow = f.render(text, True, BLACK)
+        shadow.set_alpha(alpha)
+        bg.blit(shadow, [x + 1, y - rise + 2])
+        sur = f.render(text, True, color)
+        sur.set_alpha(alpha)
+        bg.blit(sur, [x, y - rise])
+        p[4] -= 1
+    damage_popups[:] = [p for p in damage_popups if p[4] > 0]
 
 info_message = ""
 info_timer = 0
@@ -3994,6 +4029,7 @@ def draw_battle(bg, fnt):
         draw_text(bg, msg_txt, 600, 100+i*50, fnt, msg_col)
     draw_low_hp_warning(bg)
     draw_para(bg, fnt)
+    draw_damage_popups(bg, fnt)
     draw_crit_flash(bg)
 
 
@@ -4034,7 +4070,8 @@ message = [("", WHITE)]*10
 def init_message():
     for i in range(10):
         message[i] = ("", WHITE)
-        
+    damage_popups.clear()
+
 def set_message(msg, col=WHITE):
     for i in range(10):
         if message[i][0] == "":
@@ -4257,7 +4294,7 @@ def main():
     global stage_intro_timer, stage_intro_num
     global in_hidden_stage
     global combo_count
-    global crit_flash_timer, crit_flash_color
+    global crit_flash_timer, crit_flash_color, last_atk_special
     global screen_shake_timer, screen_shake_mag
     global pet_type, pet_def_bonus, pet_item_bonus
     global daily_mode
@@ -5756,6 +5793,7 @@ def main():
             if tmr ==1:
                 set_message("You attack!", (255, 230, 150))
                 se[0].play()
+                last_atk_special = None
                 combo_count += 1
                 if pl_str >= 500:
                     dmg = pl_str + random.randint(0, 200)
@@ -5783,6 +5821,7 @@ def main():
                     crit_flash_timer = CRIT_FLASH_FRAMES + 4
                     screen_shake_timer = 10
                     screen_shake_mag = 6
+                    last_atk_special = "finisher"
                 total_crit_chance = skill_crit_chance + modifier_crit_chance_bonus()
                 if total_crit_chance > 0 and random.random() < total_crit_chance:
                     dmg = int(dmg * 2)
@@ -5791,11 +5830,22 @@ def main():
                     crit_flash_timer = CRIT_FLASH_FRAMES
                     screen_shake_timer = 6
                     screen_shake_mag = 4
+                    if last_atk_special is None:
+                        last_atk_special = "crit"
             if 2 <= tmr <= 4:
                 screen.blit(imgEffect[0], [700-tmr*120, -100+tmr*120])
             if tmr == 5:
                 emy_blink = 5
                 set_message(str(dmg)+"pts of damage!", (255, 100, 100))
+                if last_atk_special == "finisher":
+                    popup_color = (255, 90, 220)
+                elif last_atk_special == "crit":
+                    popup_color = (255, 230, 90)
+                else:
+                    popup_color = (255, 140, 90)
+                popup_x = emy_x + imgEnemy.get_width()/2 - 16
+                popup_y = emy_y + emy_step - 6
+                spawn_damage_popup(popup_x, popup_y, str(dmg), popup_color, big=last_atk_special is not None)
             if tmr == 11:
                 emy_life = emy_life - dmg
                 if emy_life <= 0:
@@ -5833,6 +5883,7 @@ def main():
                 dmg_reduction = pl_def_base + pl_def_buff + pet_def_bonus + modifier_def_bonus()
                 dmg =max(1, (emy_str + random.randint(0, emy_str))- dmg_reduction)
                 set_message(str(dmg)+"pts of damage!", (255, 100, 100))
+                spawn_damage_popup(190, 585, str(dmg), (255, 90, 90), big=boss_phase2)
                 dmg_eff = 5
                 emy_step = 0
                 screen_shake_timer = 8 if boss_phase2 else 5
