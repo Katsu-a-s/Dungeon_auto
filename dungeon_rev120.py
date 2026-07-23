@@ -555,6 +555,7 @@ FLOOR_MODIFIERS = {
     "rocky":     {"name": "Rocky Floor",      "desc": "+3 DEF here, but you move slower", "color": (120, 100, 80)},
     "toxic":     {"name": "Toxic Floor",      "desc": "Enemies poison you more often",  "color": (120, 170, 60)},
     "sparkling": {"name": "Sparkling Floor",  "desc": "EXP gained here is boosted",   "color": (255, 180, 240)},
+    "serene":    {"name": "Serene Floor",     "desc": "Poison cannot affect you here", "color": (170, 255, 220)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -595,6 +596,9 @@ def modifier_poison_chance_bonus():
 
 def modifier_exp_mult():
     return 1.3 if floor_modifier == "sparkling" else 1.0
+
+def modifier_poison_immune():
+    return floor_modifier == "serene"
 
 # --- 床の彩色パッチ(見た目だけの演出) ---
 # フロアの一部区画をランダムな色合いに染めて、同じ床タイルの繰り返しでも
@@ -5750,7 +5754,7 @@ def main():
                 set_message(str(dmg)+"pts of damage!", (255, 100, 100))
                 dmg_eff = 5
                 emy_step = 0
-                if typ in (5, 7, 14) and pl_poison == 0 and random.randint(0, 99) < 30 + modifier_poison_chance_bonus():
+                if typ in (5, 7, 14) and pl_poison == 0 and not modifier_poison_immune() and random.randint(0, 99) < 30 + modifier_poison_chance_bonus():
                     pl_poison = 50
                     set_message("Poisoned!", (190, 80, 220))
             if tmr == 15:
