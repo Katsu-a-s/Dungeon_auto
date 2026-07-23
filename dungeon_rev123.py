@@ -315,6 +315,9 @@ def combo_damage_mult():
 COMBO_FINISHER_THRESHOLD = 8
 COMBO_FINISHER_MULT = 2.2
 
+# --- 逃走(Run)成功率 ---
+FLEE_CHANCE_PCT = 60
+
 # --- ボスの複数フェーズ演出 ---
 # ボスのHPが半分を切ると、1度だけ「激怒」して攻撃力が上がる。
 boss_phase2 = False
@@ -564,6 +567,7 @@ FLOOR_MODIFIERS = {
     "fortunate": {"name": "Fortunate Floor",  "desc": "Critical hits land more often here", "color": (255, 200, 80)},
     "resonant":  {"name": "Resonant Floor",   "desc": "Combo damage bonus grows faster here", "color": (255, 120, 220)},
     "frostbound": {"name": "Frostbound Floor", "desc": "Enemy attacks hit softer here", "color": (140, 210, 255)},
+    "empowered": {"name": "Empowered Floor",  "desc": "Your attacks hit harder here",  "color": (255, 90, 60)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -616,6 +620,9 @@ def modifier_combo_bonus_per_stack():
 
 def modifier_incoming_dmg_mult():
     return 0.85 if floor_modifier == "frostbound" else 1.0
+
+def modifier_atk_mult():
+    return 1.15 if floor_modifier == "empowered" else 1.0
 
 # --- 床の彩色パッチ(見た目だけの演出) ---
 # フロアの一部区画をランダムな色合いに染めて、同じ床タイルの繰り返しでも
@@ -797,6 +804,7 @@ ACHIEVEMENT_DEFS = [
     ("combo_finisher", "Unleash a Combo Finisher"),
     ("high_roller", "Win a High Roller bet at the Gambling Den"),
     ("chimera_slain", "Slay the legendary Chimera"),
+    ("escape_artist", "Flee from battle 10 times"),
 ]
 
 # --- 実績連動の称号システム ---
@@ -839,6 +847,7 @@ TITLE_DEFS = [
     ("combo_finisher",     "the Chainbreaker"),
     ("high_roller",        "the High Roller"),
     ("chimera_slain",      "the Chimera Slayer"),
+    ("escape_artist",      "the Escape Artist"),
 ]
 
 _current_title_cache = ""
@@ -983,6 +992,7 @@ STATS_DEFS = [
     ("chimeras_encountered", "Chimeras encountered"),
     ("chimeras_defeated", "Chimeras defeated"),
     ("deepest_floor_reached", "Deepest floor ever reached"),
+    ("battles_fled", "Battles fled"),
 ]
 
 playtime_ms_accum = 0
@@ -4140,6 +4150,8 @@ def battle_command(bg, fnt, key):
         c = WHITE
         if btl_cmd == i: c=BLINK[tmr%6]
         draw_text(bg, COMMAND[i], 20, 200+i*60, fnt, c)
+        if i == 3 and btl_cmd == 3:
+            draw_text(bg, f"(~{FLEE_CHANCE_PCT}% success)", 170, 200+i*60, fnt, (200, 190, 120))
     return ent
 
 message = [("", WHITE)]*10
@@ -5879,6 +5891,7 @@ def main():
                     dmg = pl_str + random.randint(0, 50)
                 else:
                     dmg = pl_str + random.randint(0, 15)
+                dmg = int(dmg * modifier_atk_mult())
                 if pl_charge:
                     dmg = int(dmg * 1.5)
                     pl_charge = False
@@ -5997,13 +6010,16 @@ def main():
             if tmr == 3: set_message(".......", (180, 180, 180))
             if tmr == 4: set_message(".........", (180, 180, 180))
             if tmr == 5:
-                if random.randint(0, 99) < 60:
+                if random.randint(0, 99) < FLEE_CHANCE_PCT:
                     idx = 22
                     ambush_battles_remaining = 0
                     mimic_battle_active = False
                     in_rift_battle = False
                     doppelganger_battle_active = False
                     chimera_battle_active = False
+                    record_stat("battles_fled")
+                    if load_stats().get("battles_fled", 0) >= 10:
+                        unlock_achievement("escape_artist")
                 else:
                     set_message("You failed to flee.", (200, 90, 90))
             if tmr == 10:
