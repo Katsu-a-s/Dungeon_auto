@@ -4338,6 +4338,13 @@ def main():
                 if event.key == K_ESCAPE and idx == 45:
                     idx = 0
                     tmr = 0
+                # タイトル画面でF1キーによりヘルプ(操作方法一覧)画面を開く
+                if event.key == K_F1 and idx == 0:
+                    idx = 57
+                    tmr = 0
+                if event.key == K_ESCAPE and idx == 57:
+                    idx = 0
+                    tmr = 0
                 # ゲームデータメニュー内でLキーによりロードメニューを開く
                 if event.key == K_l and idx == 44:
                     idx = 31
@@ -4702,6 +4709,9 @@ def main():
                     idx = 56
                     tmr = 0
                     settings_cursor = 0
+                elif action == "open_help":
+                    idx = 57
+                    tmr = 0
                 elif action == "bgm_vol_down":
                     bgm_volume = round(max(0.0, bgm_volume - VOLUME_STEP), 2)
                     pygame.mixer.music.set_volume(bgm_volume)
@@ -4853,6 +4863,12 @@ def main():
                 pygame.mixer.music.play(-1)
             screen.fill(BLACK)
             screen.blit(imgTitle, [-50, 80])
+            # 操作方法が分からず迷うプレイヤー向けに、常時表示のヘルプボタンを
+            # 右上の余白(絵柄がまだ被らない領域)に置く
+            help_label = "[F1] Help"
+            help_w = fontS.size(help_label)[0] + 30
+            draw_button(screen, fontS, 880 - help_w - 16, 12, help_w, 26, help_label, "open_help",
+                        base_color=(90, 150, 200), mouse_pos=mouse_pos)
             # 背景の絵柄と文字が被って読みにくいので、文字の後ろに半透明の帯を敷く
             panel = pygame.Surface((880, 370))
             panel.set_alpha(150)
@@ -5042,6 +5058,49 @@ def main():
             y += 40
             label = "[Esc] Back"
             draw_button(screen, fontS, MENU_X, y, fontS.size(label)[0] + 30, 28, label, "back_to_game_data",
+                        base_color=(110, 110, 120), mouse_pos=mouse_pos)
+
+        elif idx == 57:
+            # ヘルプ(操作方法一覧)画面。初めて遊ぶ人がキー操作で迷わないよう、
+            # タイトル/ダンジョン探索/バトルの3場面ごとにキー割り当てをまとめて表示する。
+            title_menu_rects.clear()
+            screen.fill(BLACK)
+            screen.blit(imgTitle, [-50, 80])
+            panel = pygame.Surface((880, 600))
+            panel.set_alpha(190)
+            panel.fill(BLACK)
+            screen.blit(panel, [0, 90])
+            MENU_X = 60
+            draw_text(screen, "Help / Controls", MENU_X, 105, font, (255, 215, 0))
+            pygame.draw.rect(screen, (90, 90, 90), [MENU_X, 145, 760, 2])
+            y = 160
+            sections = [
+                ("Title Screen", (200, 200, 255), [
+                    "Arrow Keys : Move cursor        [Space] : Start game",
+                    "[T] Difficulty   [N] Hero select   [G] Game data",
+                    "[R] Records (achievements/stats/bestiary/echo/ranking)",
+                    "[Y] Daily challenge   [H] Hidden stage (after full clear)",
+                    "[F1] This help screen   [Esc] Quit game",
+                ]),
+                ("Dungeon Exploration", (200, 255, 200), [
+                    "Arrow Keys : Move   [Q] Save menu   [K] Skill tree",
+                    "[I] Use potion   [Esc] Quit confirmation",
+                ]),
+                ("Battle", (255, 200, 160), [
+                    "[A] Attack   [P] Potion   [B] Blaze gem",
+                    "[R] Run   [D] Defense   [F] Focus",
+                    "[Up/Down] Select command   [Space/Enter] Confirm",
+                ]),
+            ]
+            for title, col, lines in sections:
+                draw_text(screen, title, MENU_X, y, fontS, col)
+                y += 30
+                for line in lines:
+                    draw_text(screen, line, MENU_X + 20, y, fontXS, WHITE)
+                    y += 26
+                y += 14
+            label = "[Esc] Back"
+            draw_button(screen, fontS, MENU_X, y, fontS.size(label)[0] + 30, 28, label, "back_to_title",
                         base_color=(110, 110, 120), mouse_pos=mouse_pos)
 
         elif idx == 45:
