@@ -3898,11 +3898,11 @@ def start_echo_battle(target_floor):
     idx = 51
     tmr = 0
 
-def draw_bar(bg, x, y, w, h, val, max):
+def draw_bar(bg, x, y, w, h, val, max, color=(0, 128, 255)):
     pygame.draw.rect(bg, WHITE, [x-2, y-2, w+4, h+4])
     pygame.draw.rect(bg, BLACK, [x, y, w, h])
     if val > 0:
-        pygame.draw.rect(bg, (0, 128, 255), [x, y, w*val/max, h])
+        pygame.draw.rect(bg, color, [x, y, w*val/max, h])
         
 def draw_exp_bar(bg, x, y, w, h):
     """現在レベル内でのEXP進捗を横バーで表示する"""
@@ -3946,9 +3946,19 @@ def draw_battle(bg, fnt):
             gy = int(emy_y + emy_step + imgEnemy.get_height()/2 - glow_r)
             bg.blit(glow, [gx, gy])
         bg.blit(imgEnemy, [emy_x, emy_y+emy_step])
-    draw_bar(bg, 340, 580, 200, 10, emy_life, emy_lifemax)
+    boss_enraged = (in_boss_battle or in_echo_battle) and boss_phase2
+    if boss_enraged:
+        # フェーズ2(HP50%以下)に入ったボスは、HPバーを脈打つ赤に染めて
+        # 「怒り状態」であることを常時わかるようにする(一度きりのメッセージだけでは
+        # ターンが進むと消えて忘れられてしまうため)。
+        pulse = 140 + int(90 * abs((tmr % 20) - 10) / 10)
+        draw_bar(bg, 340, 580, 200, 10, emy_life, emy_lifemax, (255, pulse//3, 30))
+    else:
+        draw_bar(bg, 340, 580, 200, 10, emy_life, emy_lifemax)
     if is_elite:
         draw_text(bg, "* ELITE *", 340, 560, fnt, (255, 210, 90))
+    if boss_enraged:
+        draw_text(bg, "* ENRAGED *", 340, 560, fnt, (255, 90, 40))
     if chimera_battle_active:
         draw_text(bg, "* LEGENDARY CHIMERA *", 240, 560, fnt, (255, 90, 60))
     if emy_blink > 0:
