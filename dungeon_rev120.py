@@ -974,6 +974,7 @@ STATS_DEFS = [
     ("gambles_won", "Gambling Den bets won"),
     ("chimeras_encountered", "Chimeras encountered"),
     ("chimeras_defeated", "Chimeras defeated"),
+    ("deepest_floor_reached", "Deepest floor ever reached"),
 ]
 
 playtime_ms_accum = 0
@@ -1037,6 +1038,13 @@ def record_stat(key, amount=1):
     data = load_stats()
     data[key] = data.get(key, 0) + amount
     save_stats(data)
+
+def record_stat_max(key, value):
+    """加算ではなく、これまでの最大値のみを記録したい統計(到達最深階層など)用。"""
+    data = load_stats()
+    if value > data.get(key, 0):
+        data[key] = value
+        save_stats(data)
 
 def format_playtime(ms):
     total_sec = ms // 1000
@@ -5643,6 +5651,7 @@ def main():
                     if floor > fl_max:
                         fl_max = floor
                     record_stat("total_floors_descended")
+                    record_stat_max("deepest_floor_reached", floor)
                     if difficulty == "Hard" and floor >= MAX_FLOOR:
                         unlock_achievement("hard_clear")
                     welcome = 15
