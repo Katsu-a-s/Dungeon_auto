@@ -639,6 +639,7 @@ FLOOR_MODIFIERS = {
     "swarming":  {"name": "Swarming Floor",  "desc": "Monsters lurk here far more often", "color": (150, 40, 60)},
     "weakened":  {"name": "Weakened Floor",  "desc": "Your attacks hit softer here", "color": (140, 140, 150)},
     "barren":    {"name": "Barren Floor",    "desc": "Passive healing is weaker here", "color": (140, 120, 100)},
+    "sluggish":  {"name": "Sluggish Floor",  "desc": "You move slower here",           "color": (100, 90, 130)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -668,7 +669,15 @@ def modifier_trap_mult():
     return 0.3 if floor_modifier == "quiet" else 1.0
 
 def modifier_speed_mult():
-    return 1.3 if floor_modifier == "windy" else 1.0
+    """Windy Floorは移動速度を1.3倍にする「当たり」特性だったが、
+    逆に遅くする方向の対になる特性が無かったため、Sluggish Floorとして
+    0.75倍を返す分岐を追加した(Empowered⇔Weakened、Veiled⇔Swarmingと
+    同じ、既存修飾子の符号を反転させるパターン)。"""
+    if floor_modifier == "windy":
+        return 1.3
+    if floor_modifier == "sluggish":
+        return 0.75
+    return 1.0
 
 def modifier_food_mult():
     if floor_modifier == "chilly":
@@ -1035,6 +1044,7 @@ ACHIEVEMENT_DEFS = [
     ("dungeon_warden", "Clear 15 monster dens in total"),
     ("boss_vanquisher", "Defeat 20 stage bosses in total"),
     ("shrine_devotee", "Try your luck at a shrine 20 times in total"),
+    ("rift_master", "Clear 20 unstable rifts in total"),
 ]
 
 # --- 実績画面での進捗表示 ---
@@ -1065,6 +1075,7 @@ ACHIEVEMENT_PROGRESS = {
     "dungeon_warden": ("dens_cleared", 15),
     "boss_vanquisher": ("bosses_defeated_count", 20),
     "shrine_devotee": ("shrines_used", 20),
+    "rift_master": ("rifts_cleared", 20),
 }
 
 # --- 実績連動の称号システム ---
@@ -1130,6 +1141,7 @@ TITLE_DEFS = [
     ("dungeon_warden",       "the Dungeon Warden"),
     ("boss_vanquisher",     "the Boss Vanquisher"),
     ("shrine_devotee",       "the Fatebound"),
+    ("rift_master",          "the Rift Master"),
 ]
 
 _current_title_cache = ""
@@ -1926,6 +1938,8 @@ def resolve_post_battle_transition():
         food += 100
         record_stat("rifts_cleared")
         unlock_achievement("rift_survivor")
+        if load_stats().get("rifts_cleared", 0) >= 20:
+            unlock_achievement("rift_master")
         info_message = "Rift closed! +2 Potion, +3 Blaze gem, +100 Food"
         info_timer = 60
     if ambush_battles_remaining > 0:
@@ -4565,6 +4579,14 @@ def draw_battle(bg, fnt):
         # 覚えておくしかなかった。POISON/COMBOと同じ常時表示のステータス行に
         # 並べ、次の攻撃が強化されていることを常に確認できるようにした。
         draw_text(bg, "FOCUSED! (next attack +50%)", 60, status_y, fnt, (255, 160, 60))
+        status_y += 24
+    if pl_def_buff > 0:
+        # 防御の薬(Defense Pill)によるDEFバフ(pl_def_buff)は、探索中の
+        # ステータスパネルには「DEF T: ◯」として表示されていたが、バトル中の
+        # ステータス行(POISON/FOCUSED/COMBOなど)には表示が無く、バフを
+        # かけたこと自体を忘れがちだった。FOCUSED!と同じ常時表示パターンで
+        # バトル中も確認できるようにした。
+        draw_text(bg, f"DEF UP (+{pl_def_buff})", 60, status_y, fnt, (120, 200, 255))
         status_y += 24
     if combo_count >= 2:
         if combo_count >= COMBO_FINISHER_THRESHOLD:
