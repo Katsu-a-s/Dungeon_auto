@@ -636,6 +636,7 @@ FLOOR_MODIFIERS = {
     "peaceful":  {"name": "Peaceful Floor",  "desc": "No Elite monsters appear here", "color": (180, 255, 200)},
     "bastion":   {"name": "Bastion Floor",   "desc": "Defense Pills grant much more DEF here", "color": (150, 190, 255)},
     "frail":     {"name": "Frail Floor",     "desc": "Monsters here have much less HP", "color": (190, 205, 175)},
+    "barren":    {"name": "Barren Floor",    "desc": "Passive healing is weaker here", "color": (140, 120, 100)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -675,7 +676,15 @@ def modifier_food_mult():
     return 1.0
 
 def modifier_heal_mult():
-    return 2.0 if floor_modifier == "blessed" else 1.0
+    """Blessed Floorでは歩数ごとの受動回復(heal_per_step)が2倍になる。
+    対になる「はずれ」特性のBarren Floorでは、同じ受動回復が半分に弱まる
+    (Blessedがこれまで倍増する方向のみだったため、逆方向の特性が無かった
+    穴を埋める新しい方向性として追加した)。"""
+    if floor_modifier == "blessed":
+        return 2.0
+    if floor_modifier == "barren":
+        return 0.5
+    return 1.0
 
 def modifier_def_bonus():
     return 3 if floor_modifier == "rocky" else 0
@@ -1005,6 +1014,7 @@ ACHIEVEMENT_DEFS = [
     ("elite_slayer", "Defeat 100 Elite monsters in total"),
     ("totemic", "Channel elemental totems 15 times in total"),
     ("card_shark", "Win 20 Gambling Den bets in total"),
+    ("merchant_baron", "Trade with a merchant 50 times in total"),
 ]
 
 # --- 実績画面での進捗表示 ---
@@ -1031,6 +1041,7 @@ ACHIEVEMENT_PROGRESS = {
     "elite_slayer": ("elites_defeated", 100),
     "totemic": ("totems_used", 15),
     "card_shark": ("gambles_won", 20),
+    "merchant_baron": ("merchant_trades", 50),
 }
 
 # --- 実績連動の称号システム ---
@@ -1092,6 +1103,7 @@ TITLE_DEFS = [
     ("elite_slayer",        "the Bane of Elites"),
     ("totemic",              "the Totemkeeper"),
     ("card_shark",           "the Card Shark"),
+    ("merchant_baron",      "the Merchant Baron"),
 ]
 
 _current_title_cache = ""
@@ -4418,8 +4430,14 @@ def draw_bar(bg, x, y, w, h, val, max, color=(0, 128, 255)):
     if val > 0:
         pygame.draw.rect(bg, color, [x, y, w*val/max, h])
         
+EXP_BAR_NEAR_LEVELUP_RATIO = 0.9
+EXP_BAR_PULSE_COLOR = (255, 215, 0)
+
 def draw_exp_bar(bg, x, y, w, h):
-    """現在レベル内でのEXP進捗を横バーで表示する"""
+    """現在レベル内でのEXP進捗を横バーで表示する。あと一歩でレベルアップという
+    タイミング(残り10%以内)が地味な緑色バーのままだと気づきにくかったため、
+    HP/食料などの事前警告と同じ考え方で、90%以上溜まると金色に点滅させて
+    「もうすぐレベルアップ」という期待感を煽るようにした。"""
     lo = exp_threshold(pl_lv)
     hi = exp_threshold(pl_lv + 1)
     span = max(1, hi - lo)
@@ -4428,7 +4446,10 @@ def draw_exp_bar(bg, x, y, w, h):
     pygame.draw.rect(bg, WHITE, [x-2, y-2, w+4, h+4])
     pygame.draw.rect(bg, BLACK, [x, y, w, h])
     if prog > 0:
-        pygame.draw.rect(bg, (60, 200, 70), [x, y, w*prog/span, h])
+        col = (60, 200, 70)
+        if prog / span >= EXP_BAR_NEAR_LEVELUP_RATIO and tmr % 2 == 0:
+            col = EXP_BAR_PULSE_COLOR
+        pygame.draw.rect(bg, col, [x, y, w*prog/span, h])
         
 def draw_level_gauge(bg, x, y, fnt, bar_w=150, bar_h=14):
     """'Lv◯'表示とEXPバーの高さを揃え、バーをテキストのすぐ右に配置する"""
@@ -5130,6 +5151,12 @@ def main():
                         tmr = 0
                     if load_stats().get("merchant_trades", 0) >= 5:
                         unlock_achievement("merchant_regular")
+                    # Merchant Regular(5回)の上位版。Elite Hunter->Elite Slayerや
+                    # Combo Finisher->Chain Reactionと同じく、繰り返し取引し続ける
+                    # ことを評価する累積目標が無かったため、既存の記録
+                    # (merchant_trades)をそのまま活かして追加した。
+                    if load_stats().get("merchant_trades", 0) >= 50:
+                        unlock_achievement("merchant_baron")
                 # 犠牲の祭壇(idx==61)での選択
                 if idx == 61:
                     if event.key == K_y:
