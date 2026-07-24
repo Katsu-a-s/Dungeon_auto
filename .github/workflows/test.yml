@@ -1,0 +1,80 @@
+name: Test latest dungeon_revNNN.py
+
+# 自動開発ルーティンがテストを飛ばしてバグ入りのまま `main` にマージして
+# しまう事故を防ぐためのCI。「実行対象は常に番号が最大のファイル」という
+# 運用ルールに合わせて、リポジトリ内で最も番号の大きい dungeon_revNNN.py を
+# 自動で見つけ、構文チェック + ヘッドレス起動テストを毎回実行する。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pygame
+        run: pip install pygame
+
+      - name: Find latest dungeon_revNNN.py
+        id: latest
+        run: |
+          latest=$(ls dungeon_rev*.py | sed -E 's/dungeon_rev([0-9]+)\.py/\1 &/' | sort -n | tail -1 | cut -d' ' -f2)
+          if [ -z "$latest" ]; then
+            echo "No dungeon_revNNN.py file found" >&2
+            exit 1
+          fi
+          echo "file=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest revision file: $latest"
+
+      - name: Syntax check (py_compile)
+        run: python3 -m py_compile "${{ steps.latest.outputs.file }}"
+
+      - name: Headless smoke test
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+          DUNGEON_FILE: ${{ steps.latest.outputs.file }}
+        run: |
+          python3 - <<'PYEOF'
+          import importlib.util
+          import os
+          import sys
+
+          import pygame
+
+          target = os.environ["DUNGEON_FILE"]
+          spec = importlib.util.spec_from_file_location("dungeon_under_test", target)
+          mod = importlib.util.module_from_spec(spec)
+
+          frame_count = [0]
+
+          def fake_get(*args, **kwargs):
+              frame_count[0] += 1
+              if frame_count[0] > 60:
+                  return [pygame.event.Event(pygame.QUIT)]
+              return []
+
+          pygame.event.get = fake_get
+
+          spec.loader.exec_module(mod)
+
+          try:
+              mod.main()
+          except SystemExit:
+              print(f"OK: {target} started and exited cleanly after {frame_count[0]} frames")
+          except Exception as exc:  # noqa: BLE001
+              print(f"FAILED: {target} raised {type(exc).__name__}: {exc}")
+              import traceback
+
+              traceback.print_exc()
+              sys.exit(1)
+          PYEOF
