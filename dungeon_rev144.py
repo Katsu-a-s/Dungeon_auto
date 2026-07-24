@@ -637,6 +637,7 @@ FLOOR_MODIFIERS = {
     "bastion":   {"name": "Bastion Floor",   "desc": "Defense Pills grant much more DEF here", "color": (150, 190, 255)},
     "frail":     {"name": "Frail Floor",     "desc": "Monsters here have much less HP", "color": (190, 205, 175)},
     "swarming":  {"name": "Swarming Floor",  "desc": "Monsters lurk here far more often", "color": (150, 40, 60)},
+    "barren":    {"name": "Barren Floor",    "desc": "Passive healing is weaker here", "color": (140, 120, 100)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -676,7 +677,15 @@ def modifier_food_mult():
     return 1.0
 
 def modifier_heal_mult():
-    return 2.0 if floor_modifier == "blessed" else 1.0
+    """Blessed Floorでは歩数ごとの受動回復(heal_per_step)が2倍になる。
+    対になる「はずれ」特性のBarren Floorでは、同じ受動回復が半分に弱まる
+    (Blessedがこれまで倍増する方向のみだったため、逆方向の特性が無かった
+    穴を埋める新しい方向性として追加した)。"""
+    if floor_modifier == "blessed":
+        return 2.0
+    if floor_modifier == "barren":
+        return 0.5
+    return 1.0
 
 def modifier_def_bonus():
     return 3 if floor_modifier == "rocky" else 0
@@ -1014,6 +1023,7 @@ ACHIEVEMENT_DEFS = [
     ("totemic", "Channel elemental totems 15 times in total"),
     ("card_shark", "Win 20 Gambling Den bets in total"),
     ("master_trader", "Trade with a merchant 50 times in total"),
+    ("boss_vanquisher", "Defeat 20 stage bosses in total"),
 ]
 
 # --- 実績画面での進捗表示 ---
@@ -1041,6 +1051,7 @@ ACHIEVEMENT_PROGRESS = {
     "totemic": ("totems_used", 15),
     "card_shark": ("gambles_won", 20),
     "master_trader": ("merchant_trades", 50),
+    "boss_vanquisher": ("bosses_defeated_count", 20),
 }
 
 # --- 実績連動の称号システム ---
@@ -1103,6 +1114,7 @@ TITLE_DEFS = [
     ("totemic",              "the Totemkeeper"),
     ("card_shark",           "the Card Shark"),
     ("master_trader",        "the Master Trader"),
+    ("boss_vanquisher",     "the Boss Vanquisher"),
 ]
 
 _current_title_cache = ""
@@ -4429,8 +4441,14 @@ def draw_bar(bg, x, y, w, h, val, max, color=(0, 128, 255)):
     if val > 0:
         pygame.draw.rect(bg, color, [x, y, w*val/max, h])
         
+EXP_BAR_NEAR_LEVELUP_RATIO = 0.9
+EXP_BAR_PULSE_COLOR = (255, 215, 0)
+
 def draw_exp_bar(bg, x, y, w, h):
-    """現在レベル内でのEXP進捗を横バーで表示する"""
+    """現在レベル内でのEXP進捗を横バーで表示する。あと一歩でレベルアップという
+    タイミング(残り10%以内)が地味な緑色バーのままだと気づきにくかったため、
+    HP/食料などの事前警告と同じ考え方で、90%以上溜まると金色に点滅させて
+    「もうすぐレベルアップ」という期待感を煽るようにした。"""
     lo = exp_threshold(pl_lv)
     hi = exp_threshold(pl_lv + 1)
     span = max(1, hi - lo)
@@ -4439,7 +4457,10 @@ def draw_exp_bar(bg, x, y, w, h):
     pygame.draw.rect(bg, WHITE, [x-2, y-2, w+4, h+4])
     pygame.draw.rect(bg, BLACK, [x, y, w, h])
     if prog > 0:
-        pygame.draw.rect(bg, (60, 200, 70), [x, y, w*prog/span, h])
+        col = (60, 200, 70)
+        if prog / span >= EXP_BAR_NEAR_LEVELUP_RATIO and tmr % 2 == 0:
+            col = EXP_BAR_PULSE_COLOR
+        pygame.draw.rect(bg, col, [x, y, w*prog/span, h])
         
 def draw_level_gauge(bg, x, y, fnt, bar_w=150, bar_h=14):
     """'Lv◯'表示とEXPバーの高さを揃え、バーをテキストのすぐ右に配置する。
@@ -6729,6 +6750,12 @@ def main():
                 boss_floors_cleared.add(floor)
                 unlock_achievement("boss_defeat")
                 record_stat("bosses_defeated_count")
+                # Boss Defeat(初回1回)の上位版。Elite Hunter->Elite Slayerや
+                # High Roller->Card Sharkと同じく、繰り返しボスを倒し続ける
+                # ことを評価する累積目標が無かったため、既存の記録
+                # (bosses_defeated_count)をそのまま活かして追加した。
+                if load_stats().get("bosses_defeated_count", 0) >= 20:
+                    unlock_achievement("boss_vanquisher")
                 if difficulty == "Hard" and floor >= MAX_FLOOR:
                     unlock_achievement("hard_clear")
                 pl_lifemax += 100
