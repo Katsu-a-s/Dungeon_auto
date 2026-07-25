@@ -1,7 +1,7 @@
 # Dungeon Auto
 
 Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョン探索ゲーム。
-メインファイルは **`dungeon_rev156.py`**(単一ファイル構成、約7,500行)。
+メインファイルは **`dungeon_rev157.py`**(単一ファイル構成、約7,600行)。
 
 > このリポジトリは Claude によるルーティン作業(1時間ごとの自動開発)で
 > 少しずつ機能追加・改善が行われています。このREADMEも実装状況に合わせて
@@ -29,7 +29,7 @@ Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョ�
 
 ```bash
 pip install pygame
-python3 dungeon_rev156.py
+python3 dungeon_rev157.py
 ```
 
 - 画面サイズ 880x720、キーボード + マウス操作対応。
@@ -64,8 +64,19 @@ python3 dungeon_rev156.py
 
 ### ダンジョン・進行
 - 全 **3ステージ × 30階 = 90階**(`STAGE_LENGTH`/`STAGE_COUNT`)+ 全クリア後の隠しステージ(ボス戦)。
-- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運/不作/割高(NEW)など、
-  `FLOOR_MODIFIERS`、計44種類、NEW: Withered Floor・Costly Floor)。
+- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運/不作/割高/鈍色(NEW)/腐食(NEW)など、
+  `FLOOR_MODIFIERS`、計47種類、NEW: Dim Floor・Corroded Floor)。
+- **【不具合修正】Damp Floor(湿潤の床)がコード上から消失していた不具合を修正
+  (NEW)**:rev154で追加された「Damp Floor」(爆炎石ダメージ-30%)は、
+  同時期に並行して作業されていた別のPR(rev155のベース)が、rev154より
+  前の`main`を土台にして分岐していたため、その後の3-way mergeで
+  README上の記述だけが残り、実際の`FLOOR_MODIFIERS`・
+  `modifier_blaze_dmg_mult()`のコードは反映されないまま欠落していた
+  (「実行対象は常に番号が最大のファイル」の原則により、この欠落に
+  気づかれずrev155→rev156へそのまま引き継がれていた)。あわせて同じ
+  経緯で失われていた新実績「Rift Master」(累積10回の裂け目Elite撃破で
+  解除)と、記録メニューの図鑑(Bestiary)発見数表示も、rev154時点の
+  実装を突き合わせてすべて復元した。
   フロア特性は入室直後だけでなく探索中・バトル中も画面に小さく常時表示され、
   効果を忘れにくいように改善。
 - **新フロア特性「Withered Floor(不作の床)」(NEW)**:このフロアでは、
@@ -290,9 +301,13 @@ python3 dungeon_rev156.py
 - 難易度3段階(Easy/Normal/Hard)でパラメータ調整可能。
 
 ### やり込み要素
-- 実績システム(65種、「全フロア特性をすべて一度は経験すると解除される
+- 実績システム(66種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
-- **新実績「Golden Hunter」(NEW)**:通算で10匹の金色スライム(golden
+- **新実績「Rift Master」(復元・NEW)**:通算で10回、不安定な裂け目
+  (Unstable Rift)のElite個体との遭遇を生き延びると解除(称号: the Rift
+  Master)。rev154で一度追加されていたが、上記の不具合により
+  コードから欠落していたため、今回の修正で復元した。
+- **新実績「Golden Hunter」**:通算で10匹の金色スライム(golden
   sprite)を捕まえると解除(称号: the Golden Hunter)。初回捕獲で解除
   される「golden_catch」実績(称号: the Fortune Seeker)はすでにあったが、
   Chimera Bane/Mimic Hunter/Bounty Masterなどと同様に繰り返し捕まえ
@@ -605,7 +620,8 @@ python3 dungeon_rev156.py
 ## ディレクトリ構成
 
 ```
-dungeon_rev156.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev157.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev156.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev155.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev154.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev153.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
@@ -629,6 +645,20 @@ sound/              # BGM/SE/ジングル
 
 ## 直近の更新履歴(最新順)
 
+- **(rev157)** 【不具合修正】以前rev154で追加されていた「Damp Floor
+  (湿潤の床、爆炎石ダメージ-30%)」「Rift Master実績(累積10回の裂け目
+  Elite撃破)」「記録メニューの図鑑(Bestiary)発見数表示」の3点が、
+  並行して進んでいた別PRとの3-way merge時にREADMEの記述だけを残して
+  コードから欠落していたことが判明したため、rev154時点の実装を突き合わせて
+  すべて復元した(`FLOOR_MODIFIERS`/`modifier_blaze_dmg_mult()`/
+  `ACHIEVEMENT_DEFS`/`ACHIEVEMENT_PROGRESS`/`TITLE_DEFS`/`rifts_cleared`の
+  しきい値判定/記録メニューの`[B] Bestiary`ラベルを対象に、実際の
+  `dungeon_rev154.py`との差分を確認しながら適用)。あわせて新しいフロア
+  特性「Dim Floor(鈍色の床)」(既存のRadiant Floor(クリティカル倍率
+  x2.5)の逆で、クリティカル倍率がx1.5に下がる)と「Corroded Floor
+  (腐食の床)」(既存のBastion Floor(防御の薬のDEFバフ+50%)の逆で、
+  DEFバフ量が25%減る)を、同じ「既存修飾子の符号を反転させる」パターンで
+  追加した。
 - **(rev156)** 新しいフロア特性「Withered Floor(不作の床)」を追加(このフロアでは
   拾った食料の回復量が30%減る。既存のFertile Floor(食料回復量+50%)は
   食料を増やす方向のみだったため、既存修飾子の符号を反転させるパターンで
