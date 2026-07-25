@@ -1,7 +1,7 @@
 # Dungeon Auto
 
 Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョン探索ゲーム。
-メインファイルは **`dungeon_rev157.py`**(単一ファイル構成、約7,600行)。
+メインファイルは **`dungeon_rev158.py`**(単一ファイル構成、約7,600行)。
 
 > このリポジトリは Claude によるルーティン作業(1時間ごとの自動開発)で
 > 少しずつ機能追加・改善が行われています。このREADMEも実装状況に合わせて
@@ -29,7 +29,7 @@ Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョ�
 
 ```bash
 pip install pygame
-python3 dungeon_rev157.py
+python3 dungeon_rev158.py
 ```
 
 - 画面サイズ 880x720、キーボード + マウス操作対応。
@@ -64,8 +64,8 @@ python3 dungeon_rev157.py
 
 ### ダンジョン・進行
 - 全 **3ステージ × 30階 = 90階**(`STAGE_LENGTH`/`STAGE_COUNT`)+ 全クリア後の隠しステージ(ボス戦)。
-- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運/不作/割高/鈍色(NEW)/腐食(NEW)など、
-  `FLOOR_MODIFIERS`、計47種類、NEW: Dim Floor・Corroded Floor)。
+- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運/不作/割高/鈍色/腐食/鈍化(コンボ、NEW)/無毒(NEW)など、
+  `FLOOR_MODIFIERS`、計49種類、NEW: Muffled Floor・Antiseptic Floor)。
 - **【不具合修正】Damp Floor(湿潤の床)がコード上から消失していた不具合を修正
   (NEW)**:rev154で追加された「Damp Floor」(爆炎石ダメージ-30%)は、
   同時期に並行して作業されていた別のPR(rev155のベース)が、rev154より
@@ -301,8 +301,14 @@ python3 dungeon_rev157.py
 - 難易度3段階(Easy/Normal/Hard)でパラメータ調整可能。
 
 ### やり込み要素
-- 実績システム(66種、「全フロア特性をすべて一度は経験すると解除される
+- 実績システム(67種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
+- **新実績「Altar Devotee」(NEW)**:通算で10回、生贄の祭壇(Sacrificial
+  Altar)から「Boon」の恩恵を受け取ると解除(称号: the Favored)。初回の
+  恩恵で解除される「Altar Boon」実績はすでにあったが、Golden Hunter/
+  Rift Master/Bounty Masterなどと同様に、繰り返し恩恵を受け続けることを
+  評価する累積目標が無かったため、既存の記録(`altar_boons`)をそのまま
+  活かして追加した。
 - **新実績「Rift Master」(復元・NEW)**:通算で10回、不安定な裂け目
   (Unstable Rift)のElite個体との遭遇を生き延びると解除(称号: the Rift
   Master)。rev154で一度追加されていたが、上記の不具合により
@@ -620,14 +626,14 @@ python3 dungeon_rev157.py
 ## ディレクトリ構成
 
 ```
-dungeon_rev157.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev158.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev157.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev156.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev155.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev154.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev153.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev152.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev151.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
-dungeon_rev150.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 image/              # スプライト・背景・UI画像
 sound/              # BGM/SE/ジングル
 ```
@@ -645,6 +651,26 @@ sound/              # BGM/SE/ジングル
 
 ## 直近の更新履歴(最新順)
 
+- **(rev158)** 新フロア特性「Muffled Floor(鈍化の床)」「Antiseptic Floor
+  (無毒の床)」+ 新実績「Altar Devotee」を追加。
+  - Muffled Floorは、Resonant Floor(コンボ倍率の伸びが1スタックあたり
+    +15%になる「当たり」特性)の対になる「はずれ」特性で、伸びが+5%
+    (通常の半分)に鈍る。Resonantが伸ばす方向のみだったため、
+    Empowered⇔Weakenedと同じ「既存修飾子の符号を反転させる」パターンで
+    穴を埋めた(`modifier_combo_bonus_per_stack()`)。
+  - Antiseptic Floorは、Toxic Floor(毒の発生確率が+25%pt上乗せされる
+    「はずれ」特性)の対になる「当たり」特性で、-15%pt下がる。
+    Fortunate⇔Unluckyと同じパターンで追加し、呼び出し側(`30 + この
+    戻り値`をrandintと比較)がマイナス値でもクラッシュしないことを
+    確認済み(`modifier_poison_chance_bonus()`)。
+  - `FLOOR_MODIFIERS`は47種類→**49種類**に、実績は66種→**67種**に増加。
+  - 新実績「Altar Devotee」は、通算10回の生贄の祭壇の恩恵(Boon)受領で
+    解除(称号: the Favored)。既存の記録(`altar_boons`)を使い、
+    Golden Hunter/Rift Master/Bounty Masterと同じ「初回実績はあるが
+    累積実績が無かった」パターンの穴を埋めた。
+  - ヘッドレス起動テストで`main()`がクラッシュしないこと、上記2つの
+    modifier関数が期待通りの値を返すこと、Altar Devotee実績が
+    `altar_boons`のしきい値到達で正しく解除・永続化されることを確認済み。
 - **(rev157)** 【不具合修正】以前rev154で追加されていた「Damp Floor
   (湿潤の床、爆炎石ダメージ-30%)」「Rift Master実績(累積10回の裂け目
   Elite撃破)」「記録メニューの図鑑(Bestiary)発見数表示」の3点が、
