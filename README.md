@@ -1,7 +1,7 @@
 # Dungeon Auto
 
 Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョン探索ゲーム。
-メインファイルは **`dungeon_rev155.py`**(単一ファイル構成、約7,500行)。
+メインファイルは **`dungeon_rev156.py`**(単一ファイル構成、約7,500行)。
 
 > このリポジトリは Claude によるルーティン作業(1時間ごとの自動開発)で
 > 少しずつ機能追加・改善が行われています。このREADMEも実装状況に合わせて
@@ -29,7 +29,7 @@ Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョ�
 
 ```bash
 pip install pygame
-python3 dungeon_rev155.py
+python3 dungeon_rev156.py
 ```
 
 - 画面サイズ 880x720、キーボード + マウス操作対応。
@@ -64,22 +64,34 @@ python3 dungeon_rev155.py
 
 ### ダンジョン・進行
 - 全 **3ステージ × 30階 = 90階**(`STAGE_LENGTH`/`STAGE_COUNT`)+ 全クリア後の隠しステージ(ボス戦)。
-- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運(NEW)など、
-  `FLOOR_MODIFIERS`、計43種類、NEW: Damp Floor・Drab Floor・Unlucky Floor)。
+- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運/不作/割高(NEW)など、
+  `FLOOR_MODIFIERS`、計44種類、NEW: Withered Floor・Costly Floor)。
   フロア特性は入室直後だけでなく探索中・バトル中も画面に小さく常時表示され、
   効果を忘れにくいように改善。
-- **新フロア特性「Damp Floor(湿潤の床)」(NEW)**:このフロアでは、爆炎石
+- **新フロア特性「Withered Floor(不作の床)」(NEW)**:このフロアでは、
+  拾った食料の回復量が30%減る。既存のFertile Floor(食料回復量+50%)は
+  食料を増やす方向のみの特性だったため、Sparkling⇔Drabと同じ「既存修飾子の
+  符号を反転させる」パターンで、`modifier_food_yield_mult()`に0.7倍の
+  分岐を1つ足すだけで対になる「はずれ」特性を安全に追加した。
+- **新フロア特性「Costly Floor(割高の床)」(NEW)**:このフロアでは、
+  旅の商人との取引コストが25%割高になる。既存のBazaar Floor(取引コスト
+  -25%)は安くする方向のみの特性だったため、Fortunate⇔Unluckyと同じ
+  「既存修飾子の符号を反転させる」パターンで、`modifier_trade_cost_mult()`
+  に1.25倍の分岐を1つ足すだけで対になる「はずれ」特性を安全に追加した
+  (呼び出し側の`merchant_trade_cost()`が`max(1, ...)`でクランプ済みで
+  あることを確認してから実装した)。
+- **新フロア特性「Damp Floor(湿潤の床)」**:このフロアでは、爆炎石
   (Blaze Gem)の与えるダメージが30%弱まる。既存のVolatile Floor(爆炎石
   ダメージ+50%)は爆炎石を強める方向のみの特性だったため、Frail⇔Hardened、
   Merciful⇔Ruinousと同じ「既存修飾子の符号を反転させる」パターンで、
   `modifier_blaze_dmg_mult()`に0.7倍の分岐を1つ足すだけで対になる
   「はずれ」特性を安全に追加した。
-- **新フロア特性「Drab Floor(曇天の床)」(NEW)**:このフロアでは、獲得
+- **新フロア特性「Drab Floor(曇天の床)」**:このフロアでは、獲得
   EXPが0.8倍(-20%)になる。既存のSparkling Floor(獲得EXP+30%)はEXPを
   伸ばす方向のみの特性だったため、Empowered⇔Weakenedと同じ「既存修飾子の
   符号を反転させる」パターンで、`modifier_exp_mult()`に0.8倍の分岐を1つ
   足すだけで対になる「はずれ」特性を安全に追加した。
-- **新フロア特性「Unlucky Floor(凶運の床)」(NEW)**:このフロアでは、
+- **新フロア特性「Unlucky Floor(凶運の床)」**:このフロアでは、
   クリティカルヒットの発生率が-15%pt下がる。既存のFortunate Floor(+15%pt)
   はクリティカル率を伸ばす方向のみの特性だったため、Tranquil⇔Snaredと同じ
   「既存修飾子の符号を反転させる」パターンで、`modifier_crit_chance_bonus()`
@@ -280,13 +292,19 @@ python3 dungeon_rev155.py
 ### やり込み要素
 - 実績システム(65種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
-- **新実績「Rift Master」(NEW)**:通算で10回、不安定な裂け目(Unstable
+- **新実績「Golden Hunter」(NEW)**:通算で10匹の金色スライム(golden
+  sprite)を捕まえると解除(称号: the Golden Hunter)。初回捕獲で解除
+  される「golden_catch」実績(称号: the Fortune Seeker)はすでにあったが、
+  Chimera Bane/Mimic Hunter/Bounty Masterなどと同様に繰り返し捕まえ
+  続けることを評価する累積目標が無かったため、既存の記録
+  (`golden_sprites_caught`)をそのまま活かして追加した。
+- **新実績「Rift Master」**:通算で10回、不安定な裂け目(Unstable
   Rift)のElite個体との遭遇を生き延びると解除(称号: the Rift Master)。
   初回生存で解除される「Rift Survivor」実績はすでにあったが、Chimera
   Bane/Mimic Hunter/Crimson Survivorなどと同様に繰り返し生き延び続ける
   ことを評価する累積目標が無かったため、既存の記録(`rifts_cleared`)を
   そのまま活かして追加した。
-- **新実績「Bounty Master」(NEW)**:通算で10回賞金首クエスト(Bounty Board)を
+- **新実績「Bounty Master」**:通算で10回賞金首クエスト(Bounty Board)を
   達成すると解除(称号: the Bounty Master)。初回達成で解除される「Bounty
   Hunter」実績はすでにあったが、Chimera Bane/Mimic Hunter/Crimson Survivor
   などと同様に、繰り返し達成し続けることを評価する累積目標が無かったため、
@@ -587,7 +605,8 @@ python3 dungeon_rev155.py
 ## ディレクトリ構成
 
 ```
-dungeon_rev155.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev156.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev155.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev154.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev153.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev152.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
@@ -610,6 +629,19 @@ sound/              # BGM/SE/ジングル
 
 ## 直近の更新履歴(最新順)
 
+- **(rev156)** 新しいフロア特性「Withered Floor(不作の床)」を追加(このフロアでは
+  拾った食料の回復量が30%減る。既存のFertile Floor(食料回復量+50%)は
+  食料を増やす方向のみだったため、既存修飾子の符号を反転させるパターンで
+  `modifier_food_yield_mult()`に0.7倍の分岐を1つ足すだけで対になる
+  「はずれ」特性を追加した)。新しいフロア特性「Costly Floor(割高の床)」も
+  追加(このフロアでは旅の商人との取引コストが25%割高になる。既存の
+  Bazaar Floor(取引コスト-25%)は安くする方向のみだったため、同じパターンで
+  `modifier_trade_cost_mult()`に1.25倍の分岐を1つ足すだけで対になる
+  「はずれ」特性を追加した。呼び出し側`merchant_trade_cost()`が
+  `max(1, ...)`でクランプ済みであることを確認してから実装した)。
+  通算10匹の金色スライムを捕まえると解除される新実績「Golden Hunter」
+  (称号: the Golden Hunter)を追加(既存の`golden_sprites_caught`の記録を
+  そのまま活かした累積目標)。
 - **(rev155)** 新しいフロア特性「Drab Floor(曇天の床)」を追加(このフロアでは
   獲得EXPが0.8倍(-20%)になる。既存のSparkling Floor(獲得EXP+30%)はEXPを
   伸ばす方向のみだったため、Empowered⇔Weakenedと同じ「既存修飾子の符号を
