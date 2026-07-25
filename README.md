@@ -1,7 +1,7 @@
 # Dungeon Auto
 
 Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョン探索ゲーム。
-メインファイルは **`dungeon_rev151.py`**(単一ファイル構成、約7,400行)。
+メインファイルは **`dungeon_rev152.py`**(単一ファイル構成、約7,500行)。
 
 > このリポジトリは Claude によるルーティン作業(1時間ごとの自動開発)で
 > 少しずつ機能追加・改善が行われています。このREADMEも実装状況に合わせて
@@ -29,7 +29,7 @@ Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョ�
 
 ```bash
 pip install pygame
-python3 dungeon_rev151.py
+python3 dungeon_rev152.py
 ```
 
 - 画面サイズ 880x720、キーボード + マウス操作対応。
@@ -64,11 +64,17 @@ python3 dungeon_rev151.py
 
 ### ダンジョン・進行
 - 全 **3ステージ × 30階 = 90階**(`STAGE_LENGTH`/`STAGE_COUNT`)+ 全クリア後の隠しステージ(ボス戦)。
-- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険(NEW)など、
-  `FLOOR_MODIFIERS`、計38種類、NEW: Hazardous Floor)。フロア特性は
+- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅(NEW)など、
+  `FLOOR_MODIFIERS`、計39種類、NEW: Ruinous Floor)。フロア特性は
   入室直後だけでなく探索中・バトル中も画面に小さく常時表示され、効果を
   忘れにくいように改善。
-- **新フロア特性「Hazardous Floor(危険の床)」(NEW)**:このフロアでは、罠の
+- **新フロア特性「Ruinous Floor(破滅の床)」(NEW)**:このフロアでは罠(通常の
+  罠・罠の宝箱)によるダメージが30%強くなる。既存のMerciful Floor(罠ダメージ
+  -30%)は罠を和らげる方向のみの特性だったため、Frail⇔Hardened、
+  Quiet⇔Hazardousと同じ「既存修飾子の符号を反転させる」パターンで、
+  `modifier_trap_dmg_mult()`に分岐を1つ足すだけで対になるハイリスクな
+  特性を安全に追加した。
+- **新フロア特性「Hazardous Floor(危険の床)」**:このフロアでは、罠の
   出現重みが2倍(+100%)になる。既存のQuiet Floor(罠の出現重み0.3倍)は
   罠を減らす方向のみの特性だったため、Frail⇔Hardened、Tranquil⇔Snaredと
   同じ「既存修飾子の符号を反転させる」パターンで、`modifier_trap_mult()`に
@@ -234,9 +240,15 @@ python3 dungeon_rev151.py
 - 難易度3段階(Easy/Normal/Hard)でパラメータ調整可能。
 
 ### やり込み要素
-- 実績システム(61種、「全フロア特性をすべて一度は経験すると解除される
+- 実績システム(62種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
-- **新実績「Guardian Angel」(NEW)**:通算で20人の囚われの仲間を救出すると
+- **新実績「Shadow Reaper」(NEW)**:通算で自分自身の影の分身
+  (ドッペルゲンガー)を10回倒すと解除(称号: the Shadow Reaper)。初回の
+  ドッペルゲンガー撃破で解除される「Defeat your own shadow doppelganger」
+  実績はすでにあったが、Chimera Bane/Mimic Hunter/Boss Vanquisherなどと
+  同様に、繰り返し倒し続けることを評価する累積目標が無かったため、既存の記録
+  (`doppelgangers_defeated`)をそのまま活かせるやり込み目標として追加した。
+- **新実績「Guardian Angel」**:通算で20人の囚われの仲間を救出すると
   解除(称号: the Guardian Angel)。初回の仲間救出で解除される「Rescue a
   captive ally」実績はすでにあったが、Mimic Hunter/Boss Vanquisherなどと
   同様に、繰り返し仲間を救出し続けることを評価する累積目標が無かったため、
@@ -358,7 +370,13 @@ python3 dungeon_rev151.py
   活かせるやり込み目標として追加した。
 
 ### UI/UX
-- **タイトル画面に通算プレイ時間を表示(NEW)**:タイトル画面左上に
+- **画面端の低HP警告のON/OFF設定(NEW)**:設定画面(`[O] Settings`)に
+  「Low HP Pulse」トグルを追加。残りHPが最大値の20%を切ると心拍のように
+  速く脈打つ赤い縁取りで警告する演出は、緊急性を伝える一方、Screen
+  Shake/Screen Flashと同様に光過敏なプレイヤーには負担になりうるため、
+  いつでもオフにできるアクセシビリティ設定として追加した(設定は
+  `settings.json`に永続化)。
+- **タイトル画面に通算プレイ時間を表示**:タイトル画面左上に
   「Total play time: 3h 20m」のように通算プレイ時間を常時表示するように。
   従来はプレイ統計画面(`[R] Records`→Stats)を開くまで確認できなかったが、
   実績進捗(`X/Y`)と同じくタイトル画面だけで気軽に確認できるように改善した
@@ -500,7 +518,8 @@ python3 dungeon_rev151.py
 ## ディレクトリ構成
 
 ```
-dungeon_rev151.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev152.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev151.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev150.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev149.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev148.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
@@ -521,6 +540,17 @@ sound/              # BGM/SE/ジングル
 
 ## 直近の更新履歴(最新順)
 
+- **(rev152)** 新しいフロア特性「Ruinous Floor(破滅の床)」を追加(このフロアでは
+  罠(通常の罠・罠の宝箱)によるダメージが30%強くなる。既存のMerciful Floor
+  (罠ダメージ-30%)は罠を和らげる方向のみだったため、Frail⇔Hardened、
+  Quiet⇔Hazardousと同じ「既存修飾子の符号を反転させる」パターンで
+  `modifier_trap_dmg_mult()`に分岐を1つ足すだけで対になるハイリスクな
+  特性を追加した)。通算10回ドッペルゲンガーを倒すと解除される新実績
+  「Shadow Reaper」(称号: the Shadow Reaper)を追加(既存の
+  `doppelgangers_defeated`の記録をそのまま活かした累積目標)。設定画面に
+  「Low HP Pulse」トグルを追加し、低HP時の画面端の脈打つ赤い警告演出を
+  Screen Shake/Screen Flashと同様にいつでもオフにできるようにした
+  (光過敏なプレイヤー向けのアクセシビリティ改善)。
 - **(rev151)** 新しいフロア特性「Hazardous Floor(危険の床)」を追加(このフロアでは
   罠の出現重みが2倍(+100%)になる。既存のQuiet Floor(罠の出現重み0.3倍)は
   罠を減らす方向のみだったため、Frail⇔Hardened、Tranquil⇔Snaredと同じ
