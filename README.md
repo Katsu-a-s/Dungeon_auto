@@ -64,10 +64,16 @@ python3 dungeon_rev155.py
 
 ### ダンジョン・進行
 - 全 **3ステージ × 30階 = 90階**(`STAGE_LENGTH`/`STAGE_COUNT`)+ 全クリア後の隠しステージ(ボス戦)。
-- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/曇天/凶運(NEW)など、
-  `FLOOR_MODIFIERS`、計42種類、NEW: Drab Floor・Unlucky Floor)。フロア特性は
-  入室直後だけでなく探索中・バトル中も画面に小さく常時表示され、効果を
-  忘れにくいように改善。
+- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運(NEW)など、
+  `FLOOR_MODIFIERS`、計43種類、NEW: Damp Floor・Drab Floor・Unlucky Floor)。
+  フロア特性は入室直後だけでなく探索中・バトル中も画面に小さく常時表示され、
+  効果を忘れにくいように改善。
+- **新フロア特性「Damp Floor(湿潤の床)」(NEW)**:このフロアでは、爆炎石
+  (Blaze Gem)の与えるダメージが30%弱まる。既存のVolatile Floor(爆炎石
+  ダメージ+50%)は爆炎石を強める方向のみの特性だったため、Frail⇔Hardened、
+  Merciful⇔Ruinousと同じ「既存修飾子の符号を反転させる」パターンで、
+  `modifier_blaze_dmg_mult()`に0.7倍の分岐を1つ足すだけで対になる
+  「はずれ」特性を安全に追加した。
 - **新フロア特性「Drab Floor(曇天の床)」(NEW)**:このフロアでは、獲得
   EXPが0.8倍(-20%)になる。既存のSparkling Floor(獲得EXP+30%)はEXPを
   伸ばす方向のみの特性だったため、Empowered⇔Weakenedと同じ「既存修飾子の
@@ -272,8 +278,14 @@ python3 dungeon_rev155.py
 - 難易度3段階(Easy/Normal/Hard)でパラメータ調整可能。
 
 ### やり込み要素
-- 実績システム(64種、「全フロア特性をすべて一度は経験すると解除される
+- 実績システム(65種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
+- **新実績「Rift Master」(NEW)**:通算で10回、不安定な裂け目(Unstable
+  Rift)のElite個体との遭遇を生き延びると解除(称号: the Rift Master)。
+  初回生存で解除される「Rift Survivor」実績はすでにあったが、Chimera
+  Bane/Mimic Hunter/Crimson Survivorなどと同様に繰り返し生き延び続ける
+  ことを評価する累積目標が無かったため、既存の記録(`rifts_cleared`)を
+  そのまま活かして追加した。
 - **新実績「Bounty Master」(NEW)**:通算で10回賞金首クエスト(Bounty Board)を
   達成すると解除(称号: the Bounty Master)。初回達成で解除される「Bounty
   Hunter」実績はすでにあったが、Chimera Bane/Mimic Hunter/Crimson Survivor
@@ -414,6 +426,19 @@ python3 dungeon_rev155.py
   活かせるやり込み目標として追加した。
 
 ### UI/UX
+- **【UI改善】記録メニューに図鑑(Bestiary)の発見数を表示(NEW)**:
+  タイトル画面の記録メニューの「[B] Bestiary」ボタンの隣に、
+  「(58/230)」のように図鑑(モンスター+ボス+アイテム)の発見数/総数を
+  常時表示するように。従来はBestiary画面自体を開かないと発見率が
+  わからなかったため、実績進捗と同じくメニュー一覧の時点で確認できる
+  ように改善した。
+- **【バグ修正】実績一覧の説明文が長すぎて進捗表示と重なる不具合を修正
+  (NEW)**:実績一覧画面(記録→[V] Achievements)で、説明文が長い
+  累積系実績(「Shadow Reaper」「Rift Master」など)の行が、右端の
+  進捗表示(`(0/10)`など)と文字が重なって読みにくくなる不具合があった。
+  新規追加のRift Master実績を実際にトリガー値(3/10)で描画して
+  再現テストを行った際に発見し、既存のShadow Reaperの表記も含めて
+  文言を短く整理して修正した。
 - **画面端の低HP警告のON/OFF設定(NEW)**:設定画面(`[O] Settings`)に
   「Low HP Pulse」トグルを追加。残りHPが最大値の20%を切ると心拍のように
   速く脈打つ赤い縁取りで警告する演出は、緊急性を伝える一方、Screen
@@ -563,6 +588,7 @@ python3 dungeon_rev155.py
 
 ```
 dungeon_rev155.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev154.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev153.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev152.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev151.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
@@ -597,6 +623,18 @@ sound/              # BGM/SE/ジングル
   発生しなくなるだけで安全であることを確認済み)。通算10回賞金首クエストを
   達成すると解除される新実績「Bounty Master」(称号: the Bounty Master)を
   追加(既存の`bounties_completed`の記録をそのまま活かした累積目標)。
+- **(rev154)** 新しいフロア特性「Damp Floor(湿潤の床)」を追加(このフロアでは
+  爆炎石(Blaze Gem)の与えるダメージが30%弱まる。既存のVolatile Floor
+  (爆炎石ダメージ+50%)は爆炎石を強める方向のみだったため、Frail⇔Hardened、
+  Merciful⇔Ruinousと同じ「既存修飾子の符号を反転させる」パターンで
+  `modifier_blaze_dmg_mult()`に0.7倍の分岐を1つ足すだけで対になる
+  「はずれ」特性を追加した)。通算10回、不安定な裂け目(Unstable Rift)の
+  Elite個体との遭遇を生き延びると解除される新実績「Rift Master」(称号:
+  the Rift Master)を追加(既存の`rifts_cleared`の記録をそのまま活かした
+  累積目標)。記録メニューの「[B] Bestiary」ボタンに図鑑の発見数/総数を
+  表示するように改善。また、新実績を実際の進捗値(3/10)で描画確認した際に
+  実績一覧の説明文と進捗表示が重なって読みにくくなる不具合を発見し、
+  Rift Master・既存のShadow Reaperの文言を短くして修正した。
 - **(rev153)** 新しいフロア特性「Meager Floor(質素の床)」を追加(このフロアでは
   宝箱の出現重みが半分になる。既存のOpulent Floor(宝箱出現重み2倍)は
   宝箱を増やす方向のみだったため、Frail⇔Hardened、Merciful⇔Ruinousと同じ
