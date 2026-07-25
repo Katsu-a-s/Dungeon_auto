@@ -1,7 +1,7 @@
 # Dungeon Auto
 
 Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョン探索ゲーム。
-メインファイルは **`dungeon_rev152.py`**(単一ファイル構成、約7,500行)。
+メインファイルは **`dungeon_rev153.py`**(単一ファイル構成、約7,500行)。
 
 > このリポジトリは Claude によるルーティン作業(1時間ごとの自動開発)で
 > 少しずつ機能追加・改善が行われています。このREADMEも実装状況に合わせて
@@ -29,7 +29,7 @@ Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョ�
 
 ```bash
 pip install pygame
-python3 dungeon_rev152.py
+python3 dungeon_rev153.py
 ```
 
 - 画面サイズ 880x720、キーボード + マウス操作対応。
@@ -64,11 +64,31 @@ python3 dungeon_rev152.py
 
 ### ダンジョン・進行
 - 全 **3ステージ × 30階 = 90階**(`STAGE_LENGTH`/`STAGE_COUNT`)+ 全クリア後の隠しステージ(ボス戦)。
-- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅(NEW)など、
-  `FLOOR_MODIFIERS`、計39種類、NEW: Ruinous Floor)。フロア特性は
+- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素(NEW)など、
+  `FLOOR_MODIFIERS`、計40種類、NEW: Meager Floor)。フロア特性は
   入室直後だけでなく探索中・バトル中も画面に小さく常時表示され、効果を
   忘れにくいように改善。
-- **新フロア特性「Ruinous Floor(破滅の床)」(NEW)**:このフロアでは罠(通常の
+- **新フロア特性「Meager Floor(質素の床)」(NEW)**:このフロアでは、宝箱
+  (通常の宝箱)の出現重みが半分になる。既存のOpulent Floor(宝箱出現重み
+  2倍)は宝箱を増やす方向のみの特性だったため、Frail⇔Hardened、
+  Merciful⇔Ruinousと同じ「既存修飾子の符号を反転させる」パターンで、
+  `modifier_treasure_weight_mult()`に0.5倍の分岐を1つ足すだけで対になる
+  「はずれ」特性を安全に追加した(呼び出し側で`max(1, ...)`によって重みが
+  0以下にならないようクランプ済みであることを確認してから実装した)。
+- **新実績「Crimson Survivor」(NEW)**:通算5回Blood Moon(血の満月)フロアを
+  生存してクリアすると解除(称号: the Crimson Veteran)。初回クリアで解除
+  される「Blood Moon Survivor」実績はすでにあったが、Chimera Bane/Mimic
+  Hunter/Guardian Angel/Shadow Reaperなどと同様に繰り返し生き延び続ける
+  ことを評価する累積目標が無かったため、既存の記録(`blood_moons_survived`)
+  をそのまま活かして追加した。
+- **【UI改善】実績一覧に「フロア特性の発見数」を追加表示(NEW)**:全
+  フロア特性を一度は踏破すると解除される実績「Floor Whisperer」の進捗を
+  記録する`floor_modifiers_seen`は、これまでデータとして保存されるだけで
+  画面上のどこにも表示されておらず、あと何種類のフロア特性を踏めば
+  解除できるか確認する手段が無かった。実績一覧画面の「Traps triggered」
+  表示の隣に「Floor traits discovered: 24/40」のように現在の発見数を
+  表示するようにした。
+- **新フロア特性「Ruinous Floor(破滅の床)」**:このフロアでは罠(通常の
   罠・罠の宝箱)によるダメージが30%強くなる。既存のMerciful Floor(罠ダメージ
   -30%)は罠を和らげる方向のみの特性だったため、Frail⇔Hardened、
   Quiet⇔Hazardousと同じ「既存修飾子の符号を反転させる」パターンで、
@@ -240,9 +260,15 @@ python3 dungeon_rev152.py
 - 難易度3段階(Easy/Normal/Hard)でパラメータ調整可能。
 
 ### やり込み要素
-- 実績システム(62種、「全フロア特性をすべて一度は経験すると解除される
+- 実績システム(63種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
-- **新実績「Shadow Reaper」(NEW)**:通算で自分自身の影の分身
+- **新実績「Crimson Survivor」(NEW)**:通算で5回Blood Moon(血の満月)
+  フロアを生存してクリアすると解除(称号: the Crimson Veteran)。初回クリア
+  で解除される「Blood Moon Survivor」実績はすでにあったが、Chimera Bane/
+  Mimic Hunter/Guardian Angel/Shadow Reaperなどと同様に、繰り返し生き
+  延び続けることを評価する累積目標が無かったため、既存の記録
+  (`blood_moons_survived`)をそのまま活かせるやり込み目標として追加した。
+- **新実績「Shadow Reaper」**:通算で自分自身の影の分身
   (ドッペルゲンガー)を10回倒すと解除(称号: the Shadow Reaper)。初回の
   ドッペルゲンガー撃破で解除される「Defeat your own shadow doppelganger」
   実績はすでにあったが、Chimera Bane/Mimic Hunter/Boss Vanquisherなどと
@@ -518,11 +544,11 @@ python3 dungeon_rev152.py
 ## ディレクトリ構成
 
 ```
-dungeon_rev152.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev153.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev152.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev151.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev150.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev149.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
-dungeon_rev148.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 image/              # スプライト・背景・UI画像
 sound/              # BGM/SE/ジングル
 ```
@@ -540,6 +566,18 @@ sound/              # BGM/SE/ジングル
 
 ## 直近の更新履歴(最新順)
 
+- **(rev153)** 新しいフロア特性「Meager Floor(質素の床)」を追加(このフロアでは
+  宝箱の出現重みが半分になる。既存のOpulent Floor(宝箱出現重み2倍)は
+  宝箱を増やす方向のみだったため、Frail⇔Hardened、Merciful⇔Ruinousと同じ
+  「既存修飾子の符号を反転させる」パターンで`modifier_treasure_weight_mult()`
+  に0.5倍の分岐を1つ足すだけで対になる「はずれ」特性を追加した。呼び出し側の
+  `treasure_weight = max(1, round(2 * ...))`が下限1でクランプ済みであることを
+  確認してから実装したため、宝箱が0個になる心配はない)。通算5回Blood Moon
+  フロアを生存してクリアすると解除される新実績「Crimson Survivor」(称号:
+  the Crimson Veteran)を追加(既存の`blood_moons_survived`の記録をそのまま
+  活かした累積目標)。実績一覧画面に「Floor traits discovered: X/40」を
+  追加表示し、これまでデータとして記録されるだけで確認手段が無かった
+  Floor Whisperer実績(全フロア特性踏破)の進捗を一目で確認できるようにした。
 - **(rev152)** 新しいフロア特性「Ruinous Floor(破滅の床)」を追加(このフロアでは
   罠(通常の罠・罠の宝箱)によるダメージが30%強くなる。既存のMerciful Floor
   (罠ダメージ-30%)は罠を和らげる方向のみだったため、Frail⇔Hardened、
