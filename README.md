@@ -1,7 +1,7 @@
 # Dungeon Auto
 
 Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョン探索ゲーム。
-メインファイルは **`dungeon_rev159.py`**(単一ファイル構成、約7,600行)。
+メインファイルは **`dungeon_rev160.py`**(単一ファイル構成、約7,600行)。
 
 > このリポジトリは Claude によるルーティン作業(1時間ごとの自動開発)で
 > 少しずつ機能追加・改善が行われています。このREADMEも実装状況に合わせて
@@ -29,7 +29,7 @@ Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョ�
 
 ```bash
 pip install pygame
-python3 dungeon_rev159.py
+python3 dungeon_rev160.py
 ```
 
 - 画面サイズ 880x720、キーボード + マウス操作対応。
@@ -44,7 +44,7 @@ python3 dungeon_rev159.py
 | 場面 | キー | 内容 |
 |---|---|---|
 | タイトル | 矢印キー / `Space` | メニュー選択 / ゲーム開始 |
-| タイトル | `T` | 難易度切り替え(Easy/Normal/Hard) |
+| タイトル | `T` | 難易度切り替え(Easy/Normal/Hard/Nightmare※) |
 | タイトル | `N` | キャラクター選択 |
 | タイトル | `G` | ゲームデータ(ロード/コンティニュー/設定) |
 | タイトル | `R` | 記録(実績/統計/図鑑/エコーバトル/デイリーランキング) |
@@ -60,12 +60,22 @@ python3 dungeon_rev159.py
 | 共通 | `Esc` | 戻る・キャンセル |
 | 共通 | `M` | 全音声(BGM/SE)をミュート/解除 |
 
+※ Nightmare難易度は、Hardクリア実績(hard_clear)を解除するまでは
+`T`キーでの切り替えサイクルに出てきません。まずHardで全ステージクリアして
+アンロックしてください。
+
 ## 現在の実装状況
 
 ### ダンジョン・進行
 - 全 **3ステージ × 30階 = 90階**(`STAGE_LENGTH`/`STAGE_COUNT`)+ 全クリア後の隠しステージ(ボス戦)。
-- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運/不作/割高/鈍色/腐食/鈍重(NEW)/希薄(NEW)/鈍化(コンボ、NEW)/無毒(NEW)など、
-  `FLOOR_MODIFIERS`、計51種類、NEW: Sluggish Floor・Scarce Floor・Muffled Floor・Antiseptic Floor)。
+- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運/不作/割高/鈍色/腐食/鈍重/希薄/鈍化(コンボ)/無毒/狂奔(NEW)など、
+  `FLOOR_MODIFIERS`、計52種類、NEW: Frenzied Floor)。
+- **新フロア特性「Frenzied Floor(狂奔の床)」(NEW)**:このフロアでは、
+  DEFが-3になる代わりに移動速度が1.15倍(+15%)になる。既存のRocky Floor
+  (DEF+3、移動速度-15%)は守り寄りの方向のみだったため、Frail⇔Hardenedなど
+  と同じ「既存修飾子の符号を反転させる」パターンで、`modifier_def_bonus()`と
+  `modifier_rocky_speed_mult()`にそれぞれ分岐を1つ足すだけで、DEF↔速度の
+  トレードオフを攻め寄りにも体験できる対になる特性を追加した。
 - **新フロア特性「Sluggish Floor(鈍重の床)」(NEW)**:このフロアでは、
   移動速度が0.7倍(-30%)になる。既存のWindy Floor(移動速度+30%)は
   移動を速める方向のみの特性だったため、Empowered⇔Weakenedと同じ
@@ -332,10 +342,18 @@ python3 dungeon_rev159.py
 - 4種の主人公タイプ(Warrior/Guardian/Scholar/Scout)でプレイスタイルを選択可能。
 - レベル/経験値/所持品(ポーション・爆炎石・食料など)。
 - 5系統×3段+奥義1つ、計16スキルのスキルツリー。
-- 難易度3段階(Easy/Normal/Hard)でパラメータ調整可能。
+- 難易度4段階(Easy/Normal/Hard/Nightmare)でパラメータ調整可能。Nightmareは
+  玄人向けの最上位難易度で、Hardクリア実績(hard_clear)を解除して初めて
+  タイトル画面の`[T]`切り替えサイクルに現れる(いきなり選べて初見殺しに
+  ならないようにするアンロック制)。歩数ごとの受動回復が完全に0になるのが
+  他の難易度との一番大きな違いで、ポーションや回復系のフロア特性を
+  計画的に頼らないと立ち行かなくなる。プレイ中は画面左上に脈打つ赤文字で
+  `*** NIGHTMARE MODE ***`と常時表示され、難易度ボタンの色も
+  緑(Easy)→橙(Normal)→赤橙(Hard)→深紅(Nightmare)と危険度に応じて
+  変わる。
 
 ### やり込み要素
-- 実績システム(67種、「全フロア特性をすべて一度は経験すると解除される
+- 実績システム(69種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
 - **新実績「Altar Devotee」(NEW)**:通算で10回、生贄の祭壇(Sacrificial
   Altar)から「Boon」の恩恵を受け取ると解除(称号: the Favored)。初回の
@@ -660,7 +678,8 @@ python3 dungeon_rev159.py
 ## ディレクトリ構成
 
 ```
-dungeon_rev159.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev160.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev159.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev158.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev157.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev156.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
@@ -686,6 +705,18 @@ sound/              # BGM/SE/ジングル
 
 ## 直近の更新履歴(最新順)
 
+- **(rev160)** 難易度4段階目「Nightmare」を追加(玄人向けの最上位難易度。
+  Hardクリア実績`hard_clear`を解除するまでは`T`キーの切り替えサイクルに
+  出てこないアンロック制。歩数ごとの受動回復が0になるのが最大の特徴で、
+  他のパラメータもHardよりさらに厳しい。クリアで新実績「Nightmare
+  Breaker」(称号)が解除される)。難易度ボタン/クリア画面の表示色を
+  Easy=緑/Normal=橙/Hard=赤橙/Nightmare=深紅に色分けし、Nightmareプレイ中は
+  探索画面に脈打つ`*** NIGHTMARE MODE ***`警告を常時表示するようにした。
+  新フロア特性「Frenzied Floor(狂奔の床)」も追加(既存のRocky Floor
+  (DEF+3・移動速度-15%)の対になる「攻め」寄りの特性で、DEF-3の代わりに
+  移動速度が+15%になる。`modifier_def_bonus()`/`modifier_rocky_speed_mult()`
+  に分岐を1つずつ足すだけで実装)。`FLOOR_MODIFIERS`は51種類→**52種類**に、
+  実績は68種→**69種**に増加。
 - **(rev159)** 新フロア特性「Muffled Floor(鈍化の床)」「Antiseptic Floor
   (無毒の床)」+ 新実績「Altar Devotee」を追加(PR #59 の Sluggish Floor・
   Scarce Floor・Boulder Master(dungeon_rev158.py)とファイル名が競合して
