@@ -1,7 +1,7 @@
 # Dungeon Auto
 
 Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョン探索ゲーム。
-メインファイルは **`dungeon_rev154.py`**(単一ファイル構成、約7,500行)。
+メインファイルは **`dungeon_rev155.py`**(単一ファイル構成、約7,500行)。
 
 > このリポジトリは Claude によるルーティン作業(1時間ごとの自動開発)で
 > 少しずつ機能追加・改善が行われています。このREADMEも実装状況に合わせて
@@ -29,7 +29,7 @@ Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョ�
 
 ```bash
 pip install pygame
-python3 dungeon_rev154.py
+python3 dungeon_rev155.py
 ```
 
 - 画面サイズ 880x720、キーボード + マウス操作対応。
@@ -64,17 +64,29 @@ python3 dungeon_rev154.py
 
 ### ダンジョン・進行
 - 全 **3ステージ × 30階 = 90階**(`STAGE_LENGTH`/`STAGE_COUNT`)+ 全クリア後の隠しステージ(ボス戦)。
-- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤(NEW)など、
-  `FLOOR_MODIFIERS`、計41種類、NEW: Damp Floor)。フロア特性は
-  入室直後だけでなく探索中・バトル中も画面に小さく常時表示され、効果を
-  忘れにくいように改善。
+- 迷路生成 + フロア修飾(霧/豊穣/岩場/煌めき/静穏/幸運/共鳴/氷結/剛力/豊穣の森/静謐/呪い/静寂/快晴/精鋭の巣/豪奢/光輝/慈悲/護り/市場/実直/肥沃/揮発/灯火/平穏/要塞/弱体(HP)/群棲/脆弱(ATK)/不毛/頑健/もつれ/危険/破滅/質素/湿潤/曇天/凶運(NEW)など、
+  `FLOOR_MODIFIERS`、計43種類、NEW: Damp Floor・Drab Floor・Unlucky Floor)。
+  フロア特性は入室直後だけでなく探索中・バトル中も画面に小さく常時表示され、
+  効果を忘れにくいように改善。
 - **新フロア特性「Damp Floor(湿潤の床)」(NEW)**:このフロアでは、爆炎石
   (Blaze Gem)の与えるダメージが30%弱まる。既存のVolatile Floor(爆炎石
   ダメージ+50%)は爆炎石を強める方向のみの特性だったため、Frail⇔Hardened、
   Merciful⇔Ruinousと同じ「既存修飾子の符号を反転させる」パターンで、
   `modifier_blaze_dmg_mult()`に0.7倍の分岐を1つ足すだけで対になる
   「はずれ」特性を安全に追加した。
-- **新フロア特性「Meager Floor(質素の床)」(NEW)**:このフロアでは、宝箱
+- **新フロア特性「Drab Floor(曇天の床)」(NEW)**:このフロアでは、獲得
+  EXPが0.8倍(-20%)になる。既存のSparkling Floor(獲得EXP+30%)はEXPを
+  伸ばす方向のみの特性だったため、Empowered⇔Weakenedと同じ「既存修飾子の
+  符号を反転させる」パターンで、`modifier_exp_mult()`に0.8倍の分岐を1つ
+  足すだけで対になる「はずれ」特性を安全に追加した。
+- **新フロア特性「Unlucky Floor(凶運の床)」(NEW)**:このフロアでは、
+  クリティカルヒットの発生率が-15%pt下がる。既存のFortunate Floor(+15%pt)
+  はクリティカル率を伸ばす方向のみの特性だったため、Tranquil⇔Snaredと同じ
+  「既存修飾子の符号を反転させる」パターンで、`modifier_crit_chance_bonus()`
+  に-0.15の分岐を1つ足すだけで対になる「はずれ」特性を追加した(呼び出し側が
+  `total_crit_chance > 0`を確認してから乱数判定するため、マイナスになっても
+  クリティカルが発生しなくなるだけで安全であることを確認済み)。
+- **新フロア特性「Meager Floor(質素の床)」**:このフロアでは、宝箱
   (通常の宝箱)の出現重みが半分になる。既存のOpulent Floor(宝箱出現重み
   2倍)は宝箱を増やす方向のみの特性だったため、Frail⇔Hardened、
   Merciful⇔Ruinousと同じ「既存修飾子の符号を反転させる」パターンで、
@@ -266,7 +278,7 @@ python3 dungeon_rev154.py
 - 難易度3段階(Easy/Normal/Hard)でパラメータ調整可能。
 
 ### やり込み要素
-- 実績システム(64種、「全フロア特性をすべて一度は経験すると解除される
+- 実績システム(65種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
 - **新実績「Rift Master」(NEW)**:通算で10回、不安定な裂け目(Unstable
   Rift)のElite個体との遭遇を生き延びると解除(称号: the Rift Master)。
@@ -274,7 +286,13 @@ python3 dungeon_rev154.py
   Bane/Mimic Hunter/Crimson Survivorなどと同様に繰り返し生き延び続ける
   ことを評価する累積目標が無かったため、既存の記録(`rifts_cleared`)を
   そのまま活かして追加した。
-- **新実績「Crimson Survivor」(NEW)**:通算で5回Blood Moon(血の満月)
+- **新実績「Bounty Master」(NEW)**:通算で10回賞金首クエスト(Bounty Board)を
+  達成すると解除(称号: the Bounty Master)。初回達成で解除される「Bounty
+  Hunter」実績はすでにあったが、Chimera Bane/Mimic Hunter/Crimson Survivor
+  などと同様に、繰り返し達成し続けることを評価する累積目標が無かったため、
+  既存の記録(`bounties_completed`)をそのまま活かせるやり込み目標として
+  追加した。
+- **新実績「Crimson Survivor」**:通算で5回Blood Moon(血の満月)
   フロアを生存してクリアすると解除(称号: the Crimson Veteran)。初回クリア
   で解除される「Blood Moon Survivor」実績はすでにあったが、Chimera Bane/
   Mimic Hunter/Guardian Angel/Shadow Reaperなどと同様に、繰り返し生き
@@ -569,7 +587,8 @@ python3 dungeon_rev154.py
 ## ディレクトリ構成
 
 ```
-dungeon_rev154.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev155.py  # ゲーム本体(最新版・実行対象)
+dungeon_rev154.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev153.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev152.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev151.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
@@ -591,6 +610,19 @@ sound/              # BGM/SE/ジングル
 
 ## 直近の更新履歴(最新順)
 
+- **(rev155)** 新しいフロア特性「Drab Floor(曇天の床)」を追加(このフロアでは
+  獲得EXPが0.8倍(-20%)になる。既存のSparkling Floor(獲得EXP+30%)はEXPを
+  伸ばす方向のみだったため、Empowered⇔Weakenedと同じ「既存修飾子の符号を
+  反転させる」パターンで`modifier_exp_mult()`に0.8倍の分岐を1つ足すだけで
+  対になる「はずれ」特性を追加した)。新しいフロア特性「Unlucky Floor
+  (凶運の床)」も追加(このフロアではクリティカル発生率が-15%pt下がる。
+  既存のFortunate Floor(+15%pt)はクリティカル率を伸ばす方向のみだったため、
+  Tranquil⇔Snaredと同じパターンで`modifier_crit_chance_bonus()`に-0.15の
+  分岐を1つ足すだけで対になる「はずれ」特性を追加した。呼び出し側の
+  `total_crit_chance > 0`判定により、マイナスになってもクリティカルが
+  発生しなくなるだけで安全であることを確認済み)。通算10回賞金首クエストを
+  達成すると解除される新実績「Bounty Master」(称号: the Bounty Master)を
+  追加(既存の`bounties_completed`の記録をそのまま活かした累積目標)。
 - **(rev154)** 新しいフロア特性「Damp Floor(湿潤の床)」を追加(このフロアでは
   爆炎石(Blaze Gem)の与えるダメージが30%弱まる。既存のVolatile Floor
   (爆炎石ダメージ+50%)は爆炎石を強める方向のみだったため、Frail⇔Hardened、
