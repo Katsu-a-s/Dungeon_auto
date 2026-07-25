@@ -1,0 +1,48 @@
+name: Test latest dungeon_rev
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0
+          python -m pip install --upgrade pip
+          pip install pygame
+
+      - name: Find latest dungeon_rev*.py
+        id: latest
+        run: |
+          latest=$(ls dungeon_rev*.py | sort -V | tail -1)
+          echo "file=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest rev file: $latest"
+
+      - name: Syntax check (py_compile)
+        run: python -m py_compile "${{ steps.latest.outputs.file }}"
+
+      - name: Headless smoke test
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: |
+          set +e
+          timeout 8 python "${{ steps.latest.outputs.file }}"
+          code=$?
+          # 124 = timeoutによる強制終了(数秒間クラッシュせずメインループが
+          # 回り続けた証拠なので正常とみなす)。それ以外の非ゼロ終了は失敗。
+          if [ "$code" -ne 0 ] && [ "$code" -ne 124 ]; then
+            exit "$code"
+          fi
