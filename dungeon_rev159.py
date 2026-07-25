@@ -671,6 +671,8 @@ FLOOR_MODIFIERS = {
     "damp":      {"name": "Damp Floor",      "desc": "Blaze Gems deal 30% less damage here", "color": (80, 110, 130)},
     "dim":       {"name": "Dim Floor",       "desc": "Critical hits deal x1.5 damage here (vs. x2)", "color": (90, 85, 100)},
     "corroded":  {"name": "Corroded Floor",  "desc": "Defense Pills grant 25% less DEF here", "color": (110, 130, 95)},
+    "muffled":   {"name": "Muffled Floor",   "desc": "Combo damage grows 50% slower per stack here", "color": (200, 140, 190)},
+    "antiseptic": {"name": "Antiseptic Floor", "desc": "-15%pt poison chance here", "color": (190, 230, 190)},
 }
 floor_modifier = None  # 現在のフロアの特性id(Noneなら特性なし)
 
@@ -750,7 +752,16 @@ def modifier_rocky_speed_mult():
     return 0.85 if floor_modifier == "rocky" else 1.0
 
 def modifier_poison_chance_bonus():
-    return 25 if floor_modifier == "toxic" else 0
+    """Toxic Floorは毒の発生確率が+25%pt上乗せされる「はずれ」特性だったが、
+    逆に下げる方向の対になる特性が無かったため、Antiseptic Floorとして
+    -15%ptを返す分岐を追加した(Fortunate⇔Unluckyと同じ、既存修飾子の符号を
+    反転させるパターン)。呼び出し側は 30 + この戻り値 をrandint(0,99)との
+    比較にそのまま使うため、マイナスになっても発生確率が下がるだけで安全。"""
+    if floor_modifier == "toxic":
+        return 25
+    if floor_modifier == "antiseptic":
+        return -15
+    return 0
 
 def modifier_exp_mult():
     """Sparkling Floorは獲得EXPが1.3倍になる「当たり」特性だったが、
@@ -780,7 +791,15 @@ def modifier_crit_chance_bonus():
     return 0.0
 
 def modifier_combo_bonus_per_stack():
-    return 0.15 if floor_modifier == "resonant" else 0.1
+    """Resonant Floorはコンボ倍率の伸びが1スタックあたり+15%になる「当たり」
+    特性だったが、逆に伸びを鈍らせる方向の対になる特性が無かったため、
+    Muffled Floorとして+5%(通常の半分)を返す分岐を追加した
+    (Empowered⇔Weakenedと同じ、既存修飾子の符号を反転させるパターン)。"""
+    if floor_modifier == "resonant":
+        return 0.15
+    if floor_modifier == "muffled":
+        return 0.05
+    return 0.1
 
 def modifier_incoming_dmg_mult():
     if floor_modifier == "frostbound":
@@ -1181,6 +1200,7 @@ ACHIEVEMENT_DEFS = [
     ("golden_hunter", "Catch 10 golden slimes in total"),
     ("rift_master", "Survive 10 rift Elite encounters in total"),
     ("boulder_master", "Outrun 15 rolling boulders in total"),
+    ("altar_devotee", "Receive 10 altar boons in total"),
 ]
 
 # --- 実績画面での進捗表示 ---
@@ -1219,6 +1239,7 @@ ACHIEVEMENT_PROGRESS = {
     "golden_hunter": ("golden_sprites_caught", 10),
     "rift_master": ("rifts_cleared", 10),
     "boulder_master": ("boulders_dodged", 15),
+    "altar_devotee": ("altar_boons", 10),
 }
 
 # --- 実績連動の称号システム ---
@@ -1292,6 +1313,7 @@ TITLE_DEFS = [
     ("golden_hunter",       "the Golden Hunter"),
     ("rift_master",         "the Rift Master"),
     ("boulder_master",      "the Boulder Master"),
+    ("altar_devotee",       "the Favored"),
 ]
 
 _current_title_cache = ""
@@ -2525,6 +2547,8 @@ def roll_altar_outcome():
         pl_def_base += 3
         record_stat("altar_boons")
         unlock_achievement("altar_boon")
+        if load_stats().get("altar_boons", 0) >= 10:
+            unlock_achievement("altar_devotee")
     elif name == "Silence":
         pass
     elif name == "Backlash":
