@@ -8,6 +8,7 @@ savefile[0-9].json
 autosave.json
 achievements.json
 relics.json
+charms.json
 bestiary.json
 daily.json
 settings.json
