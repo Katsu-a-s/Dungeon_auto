@@ -1,7 +1,7 @@
 # Dungeon Auto
 
 Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョン探索ゲーム。
-メインファイルは **`dungeon_rev229.py`**(単一ファイル構成、約14,800行)。
+メインファイルは **`dungeon_rev230.py`**(単一ファイル構成、約14,900行)。
 過去のバージョン(`dungeon_rev100.py`〜)もすべて残してあるが、実行・動作確認は
 常に**一番番号が大きいファイル**で行う(過去のrevファイルは削除せずすべて
 残す運用のため、ディレクトリ内には複数バージョンが並存している)。
@@ -33,7 +33,7 @@ Python + [pygame](https://www.pyga.me/) 製のローグライク風ダンジョ�
 
 ```bash
 pip install pygame
-python3 dungeon_rev229.py
+python3 dungeon_rev230.py
 ```
 
 - 画面サイズ 880x720、キーボード + マウス操作対応。
@@ -90,7 +90,13 @@ python3 dungeon_rev229.py
 ## 現在の実装状況
 
 ### ダンジョン・進行
-- **新フロア特性「Feral Floor(猛獣の床)」**:rev228で新設した
+- **(NEW) 新フロア特性「Runic Floor(ルーンの床)」**:護符の祠
+  (Charmed Floor)・秘密の宝物庫・聖なる鍵の宝物庫・旅の吟遊詩人
+  (Wandering Floor)にはすでに「確率ではなく必ず出現する」フロア特性が
+  あったのに、ルーンの祭壇(Rune Altar)だけはその仲間外れだった。この
+  フロアではルーンの祭壇が必ず1つ出現する(フロア特性は96種類→
+  **97種類**)。
+- 新フロア特性「Feral Floor(猛獣の床)」:rev228で新設した
   新モンスターFeral Warbeast(HPが減ると激昂する)も、Glaring/Wandering
   Floorの時と同じく新システム導入と同じrevでフロア特性側の穴を埋めて
   おく。このフロアではFeral Warbeastの激昂が発動するHPのしきい値が
@@ -1218,8 +1224,20 @@ python3 dungeon_rev229.py
   特性として追加した(既存のCursed Floorと同様、リスクとリターンを両方持つ方向性)。
 
 ### キャラクター・成長
-- 22種の主人公タイプ(Warrior/Guardian/Scholar/Scout/Rogue/Berserker/Prospector/Trader/Monk/Cleric/Pyromancer/Duelist/Reaver/Vagabond/Apothecary/Marshal/Ranger/Vanguard/Virtuoso/Antiquarian/Sentinel/Cartographer)でプレイスタイルを選択可能。
-- **(NEW) 護符に新しい組み合わせ「Charm of Venom Ward」を追加**:
+- 23種の主人公タイプ(Warrior/Guardian/Scholar/Scout/Rogue/Berserker/Prospector/Trader/Monk/Cleric/Pyromancer/Duelist/Reaver/Vagabond/Apothecary/Marshal/Ranger/Vanguard/Virtuoso/Antiquarian/Sentinel/Cartographer/Beastmaster)でプレイスタイルを選択可能。
+- **(NEW) 新プレイアブルキャラクター「Beastmaster(けもの使い)」**:仲間
+  (ペット)を育てる中で、卵を拾ってから「絆(Pet Bond)」が結ばれるまでの
+  期間(通常20階分歩く必要がある)を短くする手段はフロア特性「Kinship Floor」
+  (踏んでいる間だけ半分の10階に短縮)しか無く、キャラクター自身の個性として
+  仲間との絆の結ばれやすさに触れるヒーローが一体もいなかった。タイトル画面の
+  キャラクター選択(`[N] Hero`)に23人目、新しい1枠として追加(2列×12行の
+  グリッドに拡張)。絆が結ばれるまでの期間が8階短縮され(20階→12階、
+  Kinship Floorを踏んでいる間はさらに短縮されて2階)、仲間の効果が早く
+  強化版に切り替わる代わりにSTRが10下がる。専用の必殺技(Ultimate)は
+  「Primal Howl」。初めて絆を結ぶと実績「Form a Pet Bond as the Beastmaster」
+  (称号: the Wild Friend)、通算5回結ぶと称号付きの実績「the Beastmaster」が
+  解除される(実績は185種→**187種**のうち2つ)。
+- 護符に新しい組み合わせ「Charm of Venom Ward」を追加:
   状態異常のうち毒だけは、ゲーム最初期からある一番古い状態異常でありながら、
   凍結・哀弱・錆蝕・拘束・炎上・出血・幻惑の7種類にはすでに専用の護符
   (Charm of Frost Ward等)で「かかる確率そのものを下げる」対策が用意されて
@@ -1725,7 +1743,7 @@ python3 dungeon_rev229.py
     通算10回蘇生すると称号付きの「the Deathless」が解除される(見た目は
     Guardian Spriteを燃えるような朱色に染め替えた色違い、これまでと
     同じ既存素材の色違い方針)。
-  - **(NEW) Nimble Ferret**:既存10種の仲間は「孵化した瞬間からずっと
+  - **Nimble Ferret**:既存10種の仲間は「孵化した瞬間からずっと
     効き続ける受動効果」(Slime Pal〜Phoenix Chickの9種)か「フィールド
     探索の情報を教えてくれるだけの能動スキル」(Sky HawkのScout Ahead)の
     いずれかで、プレイヤーが自分の意思で選んだタイミングでバトルの
@@ -1876,9 +1894,18 @@ python3 dungeon_rev229.py
   通算10体倒すと「Serpent Charmer」が解除される。
 
 ### やり込み要素
-- 実績システム(185種、「全フロア特性をすべて一度は経験すると解除される
+- 実績システム(187種、「全フロア特性をすべて一度は経験すると解除される
   Floor Whisperer(称号: the Attuned)」を含む)+ 称号システム(実績達成で二つ名を獲得)。
-- **(NEW) 新実績「Land a critical hit with Nimble Ferret's Snap Strike」**:
+- **(NEW) 実績の表記ズレを修正「Awaken/Transcend all Heroes」**:
+  主人公を全員覚醒/超越すると解除される実績「Full Ascension」「Grand
+  Transcendence」は、達成判定そのものは常に主人公の総人数を正しく参照して
+  いたが、実績の説明文と進捗表示のしきい値だけがrev223でSentinelが
+  加わって以来ずっと古いまま(「全20人」)据え置かれていて、実際の人数
+  (Sentinel/Cartographer/Beastmasterが増えて23人)と食い違っていた。
+  Beastmasterの追加に合わせて、説明文・進捗表示のしきい値をどちらも
+  実際の人数(23人)に更新した(判定ロジック自体に変更は無い、表記のみの
+  修正)。
+- 新実績「Land a critical hit with Nimble Ferret's Snap Strike」:
   新しい仲間「Nimble Ferret」(詳しくは「キャラクター・成長」を参照)の
   追加に合わせ、Phoenix Chickの蘇生実績と同じ「初回」+「累積10回」の
   2段構成で用意した。初めてSnap Strikeでクリティカルを決めると
@@ -2712,7 +2739,8 @@ python3 dungeon_rev229.py
 ## ディレクトリ構成
 
 ```
-dungeon_rev229.py  # ゲーム本体(最新版・実行対象。常に番号が一番大きいファイルを実行する)
+dungeon_rev230.py  # ゲーム本体(最新版・実行対象。常に番号が一番大きいファイルを実行する)
+dungeon_rev229.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev228.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev227.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
 dungeon_rev226.py  # 旧バージョン(過去の履歴として保持、実行対象ではない)
@@ -2771,6 +2799,38 @@ sound/              # BGM/SE/ジングル
 
 ## 直近の更新履歴(最新順)
 
+- **(rev230)** 直近5回(rev225〜229)は新しい探索エリア・新モンスター2種・
+  新しい仲間2種と続いていたが、新プレイアブルキャラクターはrev224
+  (Cartographer)を最後にしばらく無かったため、今回はヒーローの追加を軸に
+  3つの改善を実施。①**新プレイアブルキャラクター「Beastmaster(けもの
+  使い)」**:仲間(ペット)との絆(Pet Bond)が結ばれるまでの期間(通常20階分
+  歩く必要がある)を短くする手段はフロア特性「Kinship Floor」しか無く、
+  キャラクター自身の個性として仲間との絆の結ばれやすさに触れるヒーローが
+  一体もいなかった。タイトル画面のキャラクター選択に23人目、新しい1枠と
+  して追加し、2列×11行だったグリッドを2列×12行に拡張した。絆が結ばれる
+  までの期間が8階短縮され(20階→12階、Kinship Floorと重ねがけすると
+  2階まで短縮)、仲間の効果が早く強化版に切り替わる代わりにSTRが10下がる。
+  専用の必殺技(Ultimate)は「Primal Howl」。初めて絆を結ぶと実績
+  「Form a Pet Bond as the Beastmaster」(称号: the Wild Friend)、通算5回で
+  称号付きの「the Beastmaster」が解除される(実績は185種→187種のうち2つ)。
+  ②**新フロア特性「Runic Floor(ルーンの床)」**:護符の祠・秘密の宝物庫・
+  聖なる鍵の宝物庫・旅の吟遊詩人にはすでに「確率ではなく必ず出現する」
+  フロア特性があったのに、ルーンの祭壇(Rune Altar)だけはmake_dungeon側で
+  出現確率(RUNE_ALTAR_CHANCE)を直接参照しており、guaranteed系の特性から
+  漏れていた。charm_shrine_guaranteedと同じパターンでこの穴を埋め、この
+  フロアではルーンの祭壇が必ず1つ出現するようにした(フロア特性は96種類→
+  **97種類**)。③**実績の表記ズレを修正「Awaken/Transcend all Heroes」**:
+  主人公を全員覚醒/超越すると解除される実績「Full Ascension」「Grand
+  Transcendence」は、達成判定(`len(CHARACTER_ORDER)`を参照)は常に正しかった
+  ものの、実績の説明文と進捗表示のしきい値がrev223のSentinel追加以来
+  ずっと「全20人」のまま据え置かれ、実際の人数(22人、Beastmaster追加後は
+  23人)と食い違っていたのを発見し、両方を23人に修正した(判定ロジック
+  自体は変更無し)。`py_compile`とヘッドレステストに加え、
+  modifier_pet_bond_floor_requirement()のBeastmaster単体/Kinship Floor
+  併用時の値(20/12/2)、modifier_rune_altar_guaranteed()の真偽、2列×12行の
+  グリッドで23人が衝突・はみ出し無く収まること、Beastmasterでの絆形成時に
+  実績・スタッツが記録されることを、Pythonスクリプトから実モジュールとして
+  直接呼び出す再現テストでローカルに確認した。
 - **(rev229)** 3-1節(マンネリ化への警戒)の指示に沿い、新しい仲間の
   追加を軸に3つの改善を実施。①**新しい仲間「Nimble Ferret」と初めて
   バトルに直接介入する能動スキル「Snap Strike」**:既存10種の仲間は
@@ -3033,30 +3093,6 @@ sound/              # BGM/SE/ジングル
   全種を割り当てきれなくなるため、従来通りマウスの[Equip]ボタンからのみ
   装備できるようにし、護符一覧画面の行間も詰めて[Esc] Backボタンと文字が
   重ならないよう調整した。
-- **(rev220)** 直近数回(rev215〜219)は新プレイアブルキャラクター・新
-  モンスター・新しい仲間が中心で、状態異常(毒/出血/凍結/哀弱/錆蝕)は
-  いずれも「戦っている最中」の駆け引きに効くだけで、戦闘中に選べる
-  コマンドの一部そのものを封じてくる状態異常がまだ無かったため、今回は
-  その穴を埋める新モンスターを軸に3つの改善を実施。①**新モンスター
-  「Grasping Revenant(掴みかかる亡者)」と新しい状態異常「拘束」**:
-  フロア30以降の中盤〜深層の帯に出現する新しい敵として、通常攻撃
-  (反撃を含む)が命中すると、あと3ターンの間「逃げる(Run)」コマンドを
-  フロア特性・キャラクター・秘宝・護符のボーナスに関係なく絶対に
-  失敗させる「拘束」を与えてくる。見た目は両腕を大きく広げて掴みかかる
-  ような構図の既存モンスター(Hell)を亡霊めいた灰紫色に染め直した色違い
-  (通常敵は45種→**46種**)。通算10体倒すと実績「Grasping Revenant Bane」
-  (称号: the Unshackled)が解除される(実績は167種→**169種**のうち2つ)。
-  ②**新フロア特性「Restraining Floor(戒めの床)」**:Grasping Revenantを
-  追加したのに合わせ、その拘束付与確率を+20%pt上乗せする専用のフロア
-  特性を同じrevで用意した(Bloodslick/Frostgrip/Mournful/Rusted Floorが
-  行ってきたのと同じパターン。フロア特性は88種類→**89種類**)。③**護符に
-  新しい組み合わせ「Charm of Unshackled Steps」を追加**:拘束はどんな
-  スキル・フロア特性でも軽減できない設計にしたため、Charm of Rustproof
-  Wardが錆蝕に対して行ったのと同じく、護符側からその発生確率を軽減する
-  新しい選択肢を用意した。拘束付与確率-16%ptの代わりに獲得EXPが8%下がる
-  組み合わせで、Rustproof Wardの「アイテム発見率」とは違う代償軸にした
-  (護符は8種類→**9種類**)。あわせて`[1-8]`キーまでだった装備切り替えを
-  `[1-9]`キーに対応させた。
 (これより古い更新履歴は省略。詳しくは `git log` を参照してください。)
 
 ## 開発方針
